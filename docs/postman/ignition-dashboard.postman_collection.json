@@ -1,0 +1,1424 @@
+{
+  "info": {
+    "name": "Ignition Dashboard — Backend QA",
+    "description": "Every request in docs/manual-qa.md, pre-built. Run the folders top to bottom.\n\nTokens and ids are captured automatically into collection variables, so you never paste a token by hand.\n\nBefore you start: the server must be running (`npm run dev` in the backend folder).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "hackerEmail", "value": "qa-hacker@example.com" },
+    { "key": "organizerEmail", "value": "qa-organizer@example.com" },
+    { "key": "adminEmail", "value": "qa-admin@example.com" },
+    { "key": "password", "value": "supersecret123" },
+    { "key": "hackerToken", "value": "" },
+    { "key": "organizerToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "hackerId", "value": "" },
+    { "key": "organizerId", "value": "" },
+    { "key": "adminId", "value": "" },
+    { "key": "eventMainId", "value": "" },
+    { "key": "eventFoodId", "value": "" },
+    { "key": "eventFunId", "value": "" },
+    { "key": "eventScratchId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 — Setup",
+      "description": "manual-qa §1. Proves the server is up and talking to Atlas.",
+      "item": [
+        {
+          "name": "1.7  GET /health  -> 200 {status:ok}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('1.7 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('1.7 body is {status:ok}', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "2 — Registration and login",
+      "description": "manual-qa §2. Creates the hacker account used by the rest of the run.",
+      "item": [
+        {
+          "name": "2.1  POST register (hacker)  -> 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 409 here just means you already ran this once - that is fine.",
+                  "if (pm.response.code === 409) {",
+                  "  pm.test('2.1 already registered (409) - continuing', () => true);",
+                  "} else {",
+                  "  pm.test('2.1 status is 201', () => pm.response.to.have.status(201));",
+                  "  const b = pm.response.json();",
+                  "  pm.test('2.1 role is hacker', () => pm.expect(b.user.role).to.eql('hacker'));",
+                  "  pm.test('2.2 no passwordHash in response', () => pm.expect(pm.response.text()).to.not.include('passwordHash'));",
+                  "  pm.collectionVariables.set('hackerToken', b.token);",
+                  "  pm.collectionVariables.set('hackerId', b.user._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"QA\",\n  \"lastName\": \"Hacker\",\n  \"email\": \"{{hackerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "2.3  POST register same email  -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('2.3 status is 409', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"QA\",\n  \"lastName\": \"Hacker\",\n  \"email\": \"{{hackerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "2.4  POST register password 'abc'  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('2.4 status is 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Too\",\n  \"lastName\": \"Short\",\n  \"email\": \"qa-shortpw@example.com\",\n  \"password\": \"abc\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "2.5  POST login correct  -> 200 + token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2.5 status is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('2.5 token present', () => pm.expect(b.token).to.be.a('string'));",
+                  "pm.collectionVariables.set('hackerToken', b.token);",
+                  "pm.collectionVariables.set('hackerId', b.user._id);",
+                  "console.log('2.8 - paste this into jwt.io:', b.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hackerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "2.6  POST login wrong password  -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2.6 status is 401', () => pm.response.to.have.status(401));",
+                  "pm.collectionVariables.set('errMsgWrongPassword', pm.response.json().error);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{hackerEmail}}\",\n  \"password\": \"definitely-not-it\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "2.7  POST login unknown email  -> 401, same message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2.7 status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('2.7 message identical to 2.6 (no email enumeration)', () =>",
+                  "  pm.expect(pm.response.json().error).to.eql(pm.collectionVariables.get('errMsgWrongPassword')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody-here@example.com\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "3 — Tokens and profile",
+      "description": "manual-qa §3.",
+      "item": [
+        {
+          "name": "3.1  GET /users/me no header  -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('3.1 status is 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "3.2  GET /users/me no 'Bearer ' prefix  -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('3.2 status is 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "{{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "3.3  GET /users/me valid token  -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('3.3 status is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('3.3 fullName present', () => pm.expect(b.fullName).to.be.a('string'));",
+                  "pm.test('3.3 no passwordHash', () => pm.expect(pm.response.text()).to.not.include('passwordHash'));",
+                  "pm.collectionVariables.set('hackerId', b._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "3.4  PATCH /users/me firstName Bob  -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('3.4 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('3.4 firstName updated', () => pm.expect(pm.response.json().firstName).to.eql('Bob'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{hackerToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Bob\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "3.5  PATCH /users/me role admin  -> ignored, still hacker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('3.5 status is 200 (not an error)', () => pm.response.to.have.status(200));",
+                  "pm.test('3.5 role still hacker - privilege escalation blocked', () =>",
+                  "  pm.expect(pm.response.json().role).to.eql('hacker'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{hackerToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"admin\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "3.6  GET /users/:id as hacker  -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('3.6 status is 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{hackerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{hackerId}}"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "4 — Get an organizer (manual-qa 7.1)",
+      "description": "There is no HTTP route that creates an organizer or admin.\n\nRun 'register admin-to-be' FIRST, then STOP and promote that user to `admin` by hand in Atlas -> Browse Collections -> users. Then run the rest of this folder.",
+      "item": [
+        {
+          "name": "4a  POST register admin-to-be   [then promote in Atlas]",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  pm.test('4a already registered - continuing', () => true);",
+                  "} else {",
+                  "  pm.test('4a status is 201', () => pm.response.to.have.status(201));",
+                  "  pm.collectionVariables.set('adminId', pm.response.json().user._id);",
+                  "}",
+                  "console.log('>>> STOP. In Atlas -> Browse Collections -> users, find', pm.collectionVariables.get('adminEmail'), 'and set role to \"admin\". Then continue.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"QA\",\n  \"lastName\": \"Admin\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "4b  POST register organizer-to-be",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  pm.test('4b already registered - continuing', () => true);",
+                  "} else {",
+                  "  pm.test('4b status is 201', () => pm.response.to.have.status(201));",
+                  "  pm.collectionVariables.set('organizerId', pm.response.json().user._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"QA\",\n  \"lastName\": \"Organizer\",\n  \"email\": \"{{organizerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "4c  POST login as admin  -> 200 (role must be admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4c status is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('4c role is admin (did you promote in Atlas?)', () =>",
+                  "  pm.expect(b.user.role).to.eql('admin'));",
+                  "pm.collectionVariables.set('adminToken', b.token);",
+                  "pm.collectionVariables.set('adminId', b.user._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "4d  PATCH /users/:id/role -> organizer (admin only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4d status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('4d role is now organizer', () => pm.expect(pm.response.json().role).to.eql('organizer'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"organizer\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{organizerId}}/role",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{organizerId}}", "role"]
+            }
+          }
+        },
+        {
+          "name": "4e  POST login as organizer  -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4e status is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('4e role is organizer', () => pm.expect(b.user.role).to.eql('organizer'));",
+                  "pm.collectionVariables.set('organizerToken', b.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{organizerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "5 — Schedule writing",
+      "description": "manual-qa §5. Creates the events that section 6 then reads.",
+      "item": [
+        {
+          "name": "5.1  POST /schedule as hacker  -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.1 status is 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{hackerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Should Not Exist\",\n  \"startTime\": \"2026-08-14T14:00:00.000Z\",\n  \"location\": \"Main Hall\",\n  \"category\": \"Main\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.2  POST /schedule as organizer  -> 201  (Main, Aug 14)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.2 status is 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('5.3 day derived from startTime', () => pm.expect(b.day).to.eql('2026-08-14'));",
+                  "pm.test('5.3 isFoodEvent false for Main', () => pm.expect(b.isFoodEvent).to.eql(false));",
+                  "pm.collectionVariables.set('eventMainId', b._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Opening Ceremony\",\n  \"description\": \"Kickoff\",\n  \"startTime\": \"2026-08-14T14:00:00.000Z\",\n  \"endTime\": \"2026-08-14T15:00:00.000Z\",\n  \"location\": \"Main Hall\",\n  \"category\": \"Main\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.3  POST /schedule  (Food, Aug 14)  -> isFoodEvent true",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.3 status is 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('5.3 isFoodEvent true for Food', () => pm.expect(b.isFoodEvent).to.eql(true));",
+                  "pm.collectionVariables.set('eventFoodId', b._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Lunch\",\n  \"startTime\": \"2026-08-14T16:00:00.000Z\",\n  \"endTime\": \"2026-08-14T17:00:00.000Z\",\n  \"location\": \"Cafeteria\",\n  \"category\": \"Food\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.3b POST /schedule  (Fun, Aug 15)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.3b status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('eventFunId', pm.response.json()._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Karaoke\",\n  \"startTime\": \"2026-08-15T01:00:00.000Z\",\n  \"endTime\": \"2026-08-15T02:00:00.000Z\",\n  \"location\": \"Lounge\",\n  \"category\": \"Fun\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.4  POST title '   '  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.4 status is 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"   \",\n  \"startTime\": \"2026-08-14T14:00:00.000Z\",\n  \"location\": \"Main Hall\",\n  \"category\": \"Main\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.5  POST category 'Networking'  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.5 status is 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Bad Category\",\n  \"startTime\": \"2026-08-14T14:00:00.000Z\",\n  \"location\": \"Main Hall\",\n  \"category\": \"Networking\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.6  POST endTime before startTime  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.6 status is 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Backwards\",\n  \"startTime\": \"2026-08-14T14:00:00.000Z\",\n  \"endTime\": \"2026-08-14T13:00:00.000Z\",\n  \"location\": \"Main Hall\",\n  \"category\": \"Main\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.7  POST padded title  -> saved trimmed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.7 status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('5.7 title trimmed', () => pm.expect(pm.response.json().title).to.eql('QA - Scratch Event'));",
+                  "pm.collectionVariables.set('eventScratchId', pm.response.json()._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"    QA - Scratch Event    \",\n  \"startTime\": \"2026-08-14T20:00:00.000Z\",\n  \"endTime\": \"2026-08-14T21:00:00.000Z\",\n  \"location\": \"Room 101\",\n  \"category\": \"Workshop\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "5.8  PATCH change location  -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.8 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('5.8 location updated', () => pm.expect(pm.response.json().location).to.eql('Room 202'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"location\": \"Room 202\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.9  PATCH startTime to another date  -> day changes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.9 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('5.9 day re-derived to 2026-08-16', () => pm.expect(pm.response.json().day).to.eql('2026-08-16'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startTime\": \"2026-08-16T20:00:00.000Z\",\n  \"endTime\": \"2026-08-16T21:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.10 PATCH startTime after existing endTime  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.10 status is 400 - validators re-run on update', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"startTime\": \"2026-08-16T23:00:00.000Z\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.11 PATCH day directly  -> ignored",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.11 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('5.11 day still derived, not 1999-01-01', () =>",
+                  "  pm.expect(pm.response.json().day).to.eql('2026-08-16'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{organizerToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"day\": \"1999-01-01\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.12 PATCH as hacker  -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.12 status is 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{hackerToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"location\": \"Hacked\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.13 DELETE as hacker  -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.13 status is 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.14 DELETE as organizer  -> 204 empty",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('5.14 status is 204', () => pm.response.to.have.status(204));",
+                  "pm.test('5.14 body is empty', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{organizerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.15 GET that same id  -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('5.15 status is 404', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{organizerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "6 — Schedule reading",
+      "description": "manual-qa §4. Run AFTER folder 5 so there are events to read.\n\n4.3 (sort order) and 4.4 (no blank fields) are asserted here, but LOOK at the response body yourself too - that is the point of manual QA.",
+      "item": [
+        {
+          "name": "4.1  GET /schedule no token  -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('4.1 status is 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "4.2  GET /schedule as hacker  -> 200 {count, events}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4.2 status is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('4.2 shape is {count, events}', () => {",
+                  "  pm.expect(b.count).to.be.a('number');",
+                  "  pm.expect(b.events).to.be.an('array');",
+                  "});",
+                  "const t = b.events.map(e => new Date(e.startTime).getTime());",
+                  "pm.test('4.3 sorted earliest -> latest', () =>",
+                  "  pm.expect(t).to.eql(t.slice().sort((x, y) => x - y)));",
+                  "pm.test('4.4 no blank title / startTime / location', () =>",
+                  "  b.events.forEach(e => {",
+                  "    pm.expect(String(e.title).trim(), 'title').to.not.eql('');",
+                  "    pm.expect(String(e.location).trim(), 'location').to.not.eql('');",
+                  "    pm.expect(e.startTime, 'startTime').to.be.a('string');",
+                  "  }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "4.5  GET ?day=2026-08-14",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4.5 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('4.5 every event is on that day', () =>",
+                  "  pm.response.json().events.forEach(e => pm.expect(e.day).to.eql('2026-08-14')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule?day=2026-08-14",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"],
+              "query": [{ "key": "day", "value": "2026-08-14" }]
+            }
+          }
+        },
+        {
+          "name": "4.6  GET ?category=Food",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4.6 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('4.6 all Food, all isFoodEvent true', () =>",
+                  "  pm.response.json().events.forEach(e => {",
+                  "    pm.expect(e.category).to.eql('Food');",
+                  "    pm.expect(e.isFoodEvent).to.eql(true);",
+                  "  }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule?category=Food",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"],
+              "query": [{ "key": "category", "value": "Food" }]
+            }
+          }
+        },
+        {
+          "name": "4.7  GET ?day=2026-08-14&category=Main",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4.7 status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('4.7 both filters applied', () =>",
+                  "  pm.response.json().events.forEach(e => {",
+                  "    pm.expect(e.day).to.eql('2026-08-14');",
+                  "    pm.expect(e.category).to.eql('Main');",
+                  "  }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule?day=2026-08-14&category=Main",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"],
+              "query": [
+                { "key": "day", "value": "2026-08-14" },
+                { "key": "category", "value": "Main" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.8  GET ?day=Aug-14  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('4.8 status is 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule?day=Aug-14",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"],
+              "query": [{ "key": "day", "value": "Aug-14" }]
+            }
+          }
+        },
+        {
+          "name": "4.9  GET /schedule/upcoming?limit=3",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4.9 status is 200', () => pm.response.to.have.status(200));",
+                  "const evs = pm.response.json().events;",
+                  "pm.test('4.9 at most 3', () => pm.expect(evs.length).to.be.at.most(3));",
+                  "pm.test('4.9 none in the past', () =>",
+                  "  evs.forEach(e => pm.expect(new Date(e.startTime).getTime()).to.be.at.least(Date.now() - 60000)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/upcoming?limit=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "upcoming"],
+              "query": [{ "key": "limit", "value": "3" }]
+            }
+          }
+        },
+        {
+          "name": "4.10 GET /schedule/:id  -> 200 single object",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('4.10 status is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('4.10 not wrapped in {events}', () => pm.expect(b.events).to.be.undefined);",
+                  "pm.test('4.10 is the event itself', () => pm.expect(b.title).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventMainId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventMainId}}"]
+            }
+          }
+        },
+        {
+          "name": "4.11 GET /schedule/not-an-id  -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('4.11 status is 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/not-an-id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "not-an-id"]
+            }
+          }
+        },
+        {
+          "name": "4.12 GET /schedule/<valid-shape, missing>  -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('4.12 status is 404', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{hackerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/64b7f0000000000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "64b7f0000000000000000000"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "7 — Role change takes effect immediately (7.2)",
+      "item": [
+        {
+          "name": "7.2a PATCH hacker -> organizer (admin token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('7.2a status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('7.2a role is organizer', () => pm.expect(pm.response.json().role).to.eql('organizer'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"organizer\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{hackerId}}/role",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{hackerId}}", "role"]
+            }
+          }
+        },
+        {
+          "name": "7.2b Reuse the OLD hacker token on a write  -> 201 (no re-login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('7.2b old token now passes the organizer gate', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('eventScratchId', pm.response.json()._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{hackerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"QA - Role Change Proof\",\n  \"startTime\": \"2026-08-17T18:00:00.000Z\",\n  \"endTime\": \"2026-08-17T19:00:00.000Z\",\n  \"location\": \"Room 303\",\n  \"category\": \"Workshop\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "7.2c PATCH back to hacker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('7.2c status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('7.2c role is hacker again', () => pm.expect(pm.response.json().role).to.eql('hacker'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"hacker\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{hackerId}}/role",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{hackerId}}", "role"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "8 — Cleanup (shared DB - please run this)",
+      "description": "ignition-dashboard-dev is shared with Youssef and Jeremy. Remove the QA events so their schedule stays clean.",
+      "item": [
+        {
+          "name": "Delete QA - Opening Ceremony",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{organizerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventMainId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventMainId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete QA - Lunch",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{organizerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventFoodId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventFoodId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete QA - Karaoke",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{organizerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventFunId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventFunId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete QA - Role Change Proof",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{organizerToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/schedule/{{eventScratchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "schedule", "{{eventScratchId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
