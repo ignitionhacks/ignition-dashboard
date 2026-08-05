@@ -1,0 +1,16 @@
+{
+  "name": "ignition-dashboard-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend test suite for the Ignition Hacks V7 Hacker Dashboard API. Runs against an in-memory MongoDB - no credentials or Atlas access needed.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  },
+  "author": "Abdullah (Backend)",
+  "license": "MIT",
+  "devDependencies": {
+    "mongodb-memory-server": "^10.0.0",
+    "supertest": "^7.0.0"
+  }
+}
