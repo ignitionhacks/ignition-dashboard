@@ -1,7 +1,7 @@
 # Backend Build Checklist — Ignition Hacks V7 Hacker Dashboard
 
 **Owner:** Abdullah (Backend) · **Frontend:** Jeremy · **Stack:** Node.js · Express · MongoDB (Mongoose)
-**Branch:** `backend/schedule-events` — never work on `main`.
+**Branch:** `backend/qr-attendance`, stacked on `backend/schedule-events` — never work on `main`.
 **Rule:** Nothing is ever committed automatically. Every step below has a **Test** you run yourself.
 
 This is the single planner for the whole backend. Work top to bottom. Do not mark a
@@ -25,7 +25,8 @@ C:\Users\abbar\OneDrive\Desktop\Ignition_Hack\ignition-dashboard\tests
 npm test
 ```
 
-Expect it to end with `pass 82` / `fail 0`. ✅ *(confirmed passing 2026-07-27)*
+Expect it to end with `pass 161` / `fail 0`. ✅ *(confirmed 2026-08-05, on
+`backend/qr-attendance`; it was 82 on `backend/schedule-events`)*
 It spins up its own in-memory MongoDB — no `.env`, no Atlas access, and it can never
 touch the shared `ignition-dashboard-dev` data.
 
@@ -227,16 +228,109 @@ This invalidates part of Phase 2.
 
 ---
 
-## Phase 6 — Profile: Attendance / QR check-in (design doc §3)
+## Phase 6 — QR Code + Attendance (design doc §3.2.1, §3.2.2) ✅
 
-- [ ] **6.1** `QRCode` (one-to-one with User) + `Attendance` records for `Food` events
-  - **Test:** an attendance record correctly ties user ↔ event. (`isFoodEvent` already
-    works — verified in Phase 1.)
-- [ ] **6.2** Check-in endpoint marks attendance for a food event via QR
-  - **Test:** first check-in → recorded; duplicate check-in → idempotent or 409, not a double record.
+Built on branch `backend/qr-attendance`, stacked on `backend/schedule-events` because it
+needs `ScheduleEvent`, which isn't on `main` yet. **Merge the schedule branch first.**
 
-> ⚠️ Confirm Phase 6 details against §3 of the design doc before building — those fields
-> weren't fully extracted yet.
+**Scope:** the two entities and their six routes only. **Not** the Profile page — no
+aggregate profile endpoint, no touching `status`, no change to `GET /api/users/me`.
+
+- [x] **6.1** `QRCode` model — `userId` (unique, `ref: User`), `code` (unique, immutable,
+      UUID default), `createdAt` only
+  - **Test:** `unit/qrCode.test.js` — 11 passing. Opens a **real** in-memory DB and calls
+    `syncIndexes()`, because the guarantees here are unique indexes and `validate()`
+    cannot see an index. Covers: a second code for the same user is rejected; a duplicate
+    `code` string is rejected; `code` can't be changed after creation; two users get
+    different codes. ✅
+- [x] **6.2** `Attendance` model — `userId` + `scheduleEventId` (unique **compound**
+      index), `checkedIn`, `checkedInAt`, `checkedInBy`
+  - **Test:** `unit/attendance.test.js` — 17 passing. Duplicate pair rejected; the same
+    user in two events is fine; `checkedInAt` auto-stamps via `pre('validate')`;
+    `recordCheckIn` is idempotent and survives a simulated E11000 race. ✅
+  - A **separate** `{ scheduleEventId: 1 }` index exists on purpose — the compound index
+    can only be read left-to-right, so it's no use to the headcount query.
+- [x] **6.3** `GET /api/qrcode/me` — own code, **created lazily on first call**
+  - **Test:** `integration/qrcode.test.js` — the same token twice returns the identical
+    code; three concurrent requests still produce exactly one document. Lazy rather than
+    hooked to registration because Phase 2.6 deletes `POST /api/auth/register`. ✅
+- [x] **6.4** `POST /api/qrcode/scan` — organizer/mentor, `{ code, scheduleEventId }`
+  - **Test:** first scan `201` `alreadyCheckedIn: false`; **second scan `200`
+    `alreadyCheckedIn: true` with `checkedInAt` unmoved** — a repeat scan in a food queue
+    is normal, not an error. Unknown code `404`, missing code `400`, bad event id `400`,
+    unknown event `404`, hacker `403`. ✅
+- [x] **6.5** `GET /api/qrcode/:code/user` — organizer/admin lookup when a scan fails
+  - **Test:** returns the owner with no `passwordHash`; unknown code `404`; hacker `403`. ✅
+- [x] **6.6** `GET /api/attendance/me` — the meal checklist, **computed on read**
+  - **Test:** a hacker with zero records still gets every Food event with
+    `checkedIn: false`; non-Food events never appear; sorted by `startTime`; one hacker's
+    check-in never leaks onto another's list; **reading the checklist writes no
+    documents**. ✅
+- [x] **6.7** `GET /api/attendance/event/:scheduleEventId` — headcount, organizer/admin
+  - **Test:** rows carry a nested `user`; an unattended event returns an empty list, not a
+    `404`; malformed id `400`, unknown `404`; hacker `403`. ✅
+- [x] **6.8** `POST /api/attendance` — manual check-in, organizer/mentor
+  - **Test:** `checkedInBy` comes from the token, never the body; shares
+    `Attendance.recordCheckIn` with the scan, and a test proves the manual path and the
+    scanned path produce an identical checklist. No hacker-facing self-report route
+    exists, by design. ✅
+- [x] **6.9** Full suite green — `integration/attendance.test.js` 28, `qrcode` 23,
+      units 28. **161 / 161 passing**, up from 82. ✅
+- [x] **6.10** Docs — [README.md](README.md) schema + endpoint tables, manual-qa §9/§10,
+      Postman folders 9/10/11, this phase ✅
+- [x] **6.11** Run manual-qa **§9 and §10** in Postman against the live database, then
+      clean up `qrcodes` / `attendances` by hand (there's no DELETE route for either)
+  - **Test:** the Passed column in §9/§10 is filled in. ✅ 2026-08-05 — folder 9 **44/44**,
+    folder 10 **43/43**, folder 11 **5/5**, against freshly emptied collections. Rows 9.3,
+    9.8 and 10.6 aren't HTTP calls and were closed by counting documents afterwards:
+    **`qrcodes` 2, `attendances` 2** — two users, two Food events, despite nine requests
+    hitting a check-in or checklist route. Repeat scans write nothing; reads create nothing.
+  - Cleanup is now scripted rather than clicked: **`npm run clean:qa`** in `backend/`
+    (`src/scripts/cleanQaData.js`) empties `attendances` and `qrcodes` and deletes
+    `scheduleevents` titled `QA*`. Dry run by default; `npm run clean:qa -- --yes` to
+    delete. It refuses to run unless the database name contains `dashboard`, so it can
+    never reach `ignition-portal-dev`. Needed because folder 9 creates fresh events every
+    run while folder 11 only deletes the newest set.
+- [x] **6.12** The QA collection is re-runnable — five assertion bugs found and fixed
+      during 6.11, **none of them in the API**
+  - `9.0.7` / `9.0.10` read `json().user.role`; `PATCH /users/:id/role` returns the user
+    object itself, only `login` wraps it.
+  - `10.2` / `10.6` / `10.16` hardcoded absolute tick counts, valid only on an empty
+    database; now measured against a baseline captured in `10.2`.
+  - **`10.20` was the real one.** It checked in `freshId` — the account `10.1` asserts has
+    *no* attendance. It passed on the first run and broke `10.1` on every run after, so
+    the collection destroyed its own preconditions. Now targets the already-checked-in
+    hacker so it writes nothing.
+  - **Test:** folders 9 → 10 → 11 all green on a clean database. ✅ 2026-08-05
+  - ⚠️ **Not yet proven:** that they're green *twice in a row* without a wipe in between.
+    The fixes are designed for it — folder 11 removes the events each run and `10.20` no
+    longer dirties the fresh hacker — but the only run so far started from an empty
+    database. Re-run 9 → 10 → 11 a second time before relying on it.
+
+### Open findings from Phase 6
+
+- [ ] **6.F1** **Admins can't check anyone in.** §3.2.1/§3.2.2 grant both write routes to
+      *"Organizer, Mentor"*, so an admin gets `403` from `POST /api/qrcode/scan` and
+      `POST /api/attendance` — they can see the headcount but not fix it. Separately a
+      **mentor can scan but can't look up a code** (`GET /api/qrcode/:code/user` is
+      organizer/admin), which is backwards: the person holding the scanner is exactly who
+      needs the manual lookup when a scan fails. Built to the doc as written and tested
+      both ways. **Blocked:** needs the team lead to say whether it's a spec slip. If so
+      it's one word per route in `qrCodeRoutes.js` / `attendanceRoutes.js`.
+  - **Test:** an admin token gets `201` from both write routes.
+- [ ] **6.F2** **`User.qrCodeId` is dead**, same shape of defect as `2.6.F1`. The field
+      exists on the User model; nothing writes it. Deliberately left unset — QR Code holds
+      the `userId` and that's the single source of truth for a 1:1 link, so populating
+      both would let them disagree. Belongs in the 2.6 User rewrite: either drop the field
+      or make it the only direction.
+  - **Test:** whichever way it goes, there's exactly one place that says who owns a code.
+- [ ] **6.F3** **Workshops aren't on the checklist.** §3.2.2 reads as the *meal*
+      checklist, so `GET /api/attendance/me` filters `isFoodEvent: true`. Confirm that's
+      what's wanted — workshop attendance is a one-line change if it isn't.
+- [ ] **6.F4** **No un-check-in, and no cascade.** Nothing sets `checkedIn` back to
+      `false` and there's no DELETE route, so a mis-scan has to be fixed in Atlas by hand.
+      Deleting a Schedule Event also leaves its attendance records orphaned. Neither is
+      asked for in §3.2.2; both are worth a decision before the event.
 
 ---
 

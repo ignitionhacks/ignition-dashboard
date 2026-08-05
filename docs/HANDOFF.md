@@ -102,7 +102,13 @@ ignition-dashboard/
 
 ## Current state — what's built and verified
 
-**Phases 0, 1, 2 and 2.5 are done.** Verification: **`pass 82` / `fail 0`** (2026-07-27).
+**Phases 0, 1, 2, 2.5 and 6 are done.** Verification: **`pass 161` / `fail 0`**
+(2026-08-05, on branch `backend/qr-attendance`).
+
+> **Two live branches.** `backend/schedule-events` holds phases 0–2.5 (82 tests) and is
+> the one waiting on Youssef. `backend/qr-attendance` is **stacked on top of it** — it
+> needs `ScheduleEvent`, which isn't on `main` — and holds phase 6 as well (161 tests).
+> **Merge the schedule branch first**, otherwise the QR branch won't build.
 
 - **Phase 1 — Schedule Event (§2.2.1)**, the Wednesday deliverable. Model with all
   documented fields plus server-derived `day` (`YYYY-MM-DD`, UTC) and `isFoodEvent`.
@@ -117,7 +123,19 @@ ignition-dashboard/
   All schedule routes require a token; writes require organizer/admin.
 - **Phase 2.5 — restructure.** Backend moved under `backend/`; the old
   `src/scripts/smokeTest.js` (57 hand-rolled checks) became a real `tests/` package using
-  Node's built-in `node --test`, split into `unit/` and `integration/`, now 82 tests.
+  Node's built-in `node --test`, split into `unit/` and `integration/` — 82 tests at that
+  point, 161 now.
+- **Phase 6 — QR Code (§3.2.1) + Attendance (§3.2.2).** `QRCode` (one per user, UUID,
+  both fields unique-indexed, created lazily on first `GET /api/qrcode/me`) and
+  `Attendance` (unique on `userId`+`scheduleEventId`). Six routes:
+  `GET /api/qrcode/me`, `POST /api/qrcode/scan`, `GET /api/qrcode/:code/user`,
+  `GET /api/attendance/me`, `GET /api/attendance/event/:id`, `POST /api/attendance`.
+  Repeat scans are idempotent — `200` with `alreadyCheckedIn: true`, timestamp unmoved.
+  The meal checklist is **computed on read**, never pre-created. **Scope stopped at the
+  entities** — no Profile page, no aggregate profile endpoint, `status` untouched.
+  **Manual QA is done** (2026-08-05): Postman folders 9/10/11 → `44/44`, `43/43`, `5/5`
+  against emptied collections, and `manual-qa.md` §9/§10 Passed columns are filled in.
+  Cleanup between runs is scripted — see `6.11` in [CHECKLIST.md](CHECKLIST.md).
 
 ### How to verify in one command
 
@@ -127,7 +145,7 @@ From `C:\Users\abbar\OneDrive\Desktop\Ignition_Hack\ignition-dashboard\tests`:
 npm test
 ```
 
-Ends with `pass 82` / `fail 0` → the backend is healthy. If not, fix that before anything
+Ends with `pass 161` / `fail 0` → the backend is healthy. If not, fix that before anything
 else. (First time only: `npm install` in **both** `backend` and `tests`.)
 
 ### ⚠️ Known gaps — don't mistake these for bugs
