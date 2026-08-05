@@ -1,26 +1,28 @@
+import { NavLink } from 'react-router-dom';
+
 const navIconAssets = {
-  article: 'https://www.figma.com/api/mcp/asset/f690edb2-2f15-4f82-b683-b7bddb4861ef',
-  calendar: 'https://www.figma.com/api/mcp/asset/0452bd28-b33a-4573-a6d3-cb6130e80d67',
-  checkerboard: 'https://www.figma.com/api/mcp/asset/635b83e5-9b23-4693-8628-4f42872b608f',
-  user: 'https://www.figma.com/api/mcp/asset/eaaccaa6-288e-4e72-8ce9-464a7fa239df',
-  link: 'https://www.figma.com/api/mcp/asset/f9cd58d6-56d7-4ffa-abbb-eac21b53925d',
-  discord: 'https://www.figma.com/api/mcp/asset/86eb924a-32f3-4eb4-a0b4-568903800b90',
-  map: 'https://www.figma.com/api/mcp/asset/ca019bb5-9454-4192-bbb1-9095d3784064',
-  ambulance: 'https://www.figma.com/api/mcp/asset/e0ad59e4-1123-427a-806a-a27c33b115b7',
+  article: '/assets/icon-home.svg',
+  calendar: '/assets/icon-calendar.svg',
+  checkerboard: '/assets/icon-bingo.svg',
+  user: '/assets/icon-user.svg',
+  link: '/assets/icon-link.svg',
+  discord: '/assets/icon-discord.svg',
+  map: '/assets/icon-map.svg',
+  ambulance: '/assets/icon-help.svg',
 };
 
 const footerAssets = {
-  star: 'https://www.figma.com/api/mcp/asset/b76e7845-0543-4387-9af8-fe81c5202b2c',
-  redDot: 'https://www.figma.com/api/mcp/asset/c2dd4b69-443b-4406-b140-450074574db7',
-  blueFlower: 'https://www.figma.com/api/mcp/asset/8bb3fee2-128c-4058-aa38-8c1bf8c7e196',
-  purpleFlame: 'https://www.figma.com/api/mcp/asset/d02a5120-c2f0-4a12-962f-6fc99b3d3635',
+  star: '/assets/footer-star.svg',
+  redDot: '/assets/footer-red-dot.svg',
+  blueFlower: '/assets/footer-blue-flower.svg',
+  logo: '/assets/logo.svg',
 };
 
 const navItems = [
-  { id: 'home', label: 'Home', icon: 'article', active: false },
-  { id: 'schedule', label: 'Schedule', icon: 'calendar', active: true },
-  { id: 'bingo', label: 'Bingo', icon: 'checkerboard', active: false },
-  { id: 'profile', label: 'My Profile', icon: 'user', active: false },
+  { id: 'home', label: 'Home', icon: 'article' },
+  { id: 'schedule', label: 'Schedule', icon: 'calendar', to: '/schedule' },
+  { id: 'bingo', label: 'Bingo', icon: 'checkerboard' },
+  { id: 'profile', label: 'My Profile', icon: 'user', to: '/profile' },
 ];
 
 const quickLinks = [
@@ -31,12 +33,30 @@ const quickLinks = [
 ];
 
 function NavItem({ item, compact = false }) {
+  const className = `nav-item ${compact ? 'compact-item' : ''}`;
+
+  if (item.to) {
+    return (
+      <NavLink
+        to={item.to}
+        aria-label={item.label}
+        title={item.label}
+        className={({ isActive }) => `${className} ${isActive ? 'active' : ''}`}
+      >
+        <span className="nav-icon-wrapper" aria-hidden="true">
+          <img src={navIconAssets[item.icon]} alt="" className="nav-icon-image" />
+        </span>
+        <span>{item.label}</span>
+      </NavLink>
+    );
+  }
+
   return (
     <button
       type="button"
       aria-label={item.label}
       title={item.label}
-      className={`nav-item ${compact ? 'compact-item' : ''} ${item.active ? 'active' : ''}`}
+      className={className}
     >
       <span className="nav-icon-wrapper" aria-hidden="true">
         <img src={navIconAssets[item.icon]} alt="" className="nav-icon-image" />
@@ -73,7 +93,7 @@ export default function Navbar() {
         <img src={footerAssets.star} alt="" className="footer-asset star" />
         <img src={footerAssets.redDot} alt="" className="footer-asset red-dot" />
         <img src={footerAssets.blueFlower} alt="" className="footer-asset blue-flower" />
-        <img src={footerAssets.purpleFlame} alt="" className="footer-asset purple-flame" />
+        <img src={footerAssets.logo} alt="" className="footer-asset logo" />
       </div>
     </aside>
   );

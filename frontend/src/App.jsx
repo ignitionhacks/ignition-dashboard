@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import SchedulePage, { filterEventsByDay } from './components/SchedulePage';
+import ProfilePage from './components/ProfilePage';
+import SchedulePage from './components/SchedulePage';
 import './main.css';
 
-const logoAsset = 'https://www.figma.com/api/mcp/asset/3ee6ee4c-2be8-43f1-92bd-110f42d8df50';
+const logoAsset = '/assets/logo.svg';
 
 function TopBar() {
   return (
@@ -19,17 +20,18 @@ function TopBar() {
 }
 
 export default function App() {
-  const [selectedCategory, setSelectedCategory] = useState('Main');
-
-  const eventsByDay = useMemo(() => filterEventsByDay(selectedCategory), [selectedCategory]);
-
   return (
     <div className="app-shell">
       <TopBar />
       <div className="page-frame">
         <Navbar />
         <main>
-          <SchedulePage selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} eventsByDay={eventsByDay} />
+          <Routes>
+            <Route path="/" element={<Navigate to="/schedule" replace />} />
+            <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<Navigate to="/schedule" replace />} />
+          </Routes>
         </main>
       </div>
     </div>

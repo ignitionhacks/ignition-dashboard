@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react';
+
 const categories = ['Main', 'Fun', 'Food', 'Workshop'];
 
 const categoryStyles = {
@@ -7,7 +9,7 @@ const categoryStyles = {
   Workshop: { className: 'chip red', accent: '#ff585b' },
 };
 
-const mapPinAsset = 'https://www.figma.com/api/mcp/asset/9bbae596-9e22-4d46-aefd-2245b75425c0';
+const mapPinAsset = '/assets/icon-pin.svg';
 
 export const eventsData = [
   {
@@ -111,7 +113,10 @@ export function filterEventsByDay(selectedCategory) {
   }));
 }
 
-export default function SchedulePage({ selectedCategory, onSelectCategory, eventsByDay }) {
+export default function SchedulePage() {
+  const [selectedCategory, setSelectedCategory] = useState('Main');
+  const eventsByDay = useMemo(() => filterEventsByDay(selectedCategory), [selectedCategory]);
+
   return (
     <section className="schedule-panel">
       <div className="schedule-header">
@@ -126,7 +131,7 @@ export default function SchedulePage({ selectedCategory, onSelectCategory, event
                 key={category}
                 type="button"
                 className={`${style.className} ${isActive ? 'active' : ''}`}
-                onClick={() => onSelectCategory(category)}
+                onClick={() => setSelectedCategory(category)}
                 style={isActive ? { backgroundColor: style.accent } : undefined}
               >
                 {category}
