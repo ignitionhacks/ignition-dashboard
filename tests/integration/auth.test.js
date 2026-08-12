@@ -24,9 +24,9 @@ describe('POST /api/auth/register', () => {
     const res = await agent.post('/api/auth/register').send(validRegistration());
 
     assert.equal(res.status, 201);
-    assert.equal(typeof res.body.token, 'string');
-    assert.ok(res.body.token.length > 0);
-    assert.equal(res.body.user.role, 'hacker');
+    assert.equal(typeof res.body.data.token, 'string');
+    assert.ok(res.body.data.token.length > 0);
+    assert.equal(res.body.data.user.role, 'hacker');
   });
 
   test('lowercases the email', async () => {
@@ -34,12 +34,12 @@ describe('POST /api/auth/register', () => {
       .post('/api/auth/register')
       .send(validRegistration({ email: 'Bobby@Example.com' }));
 
-    assert.equal(res.body.user.email, 'bobby@example.com');
+    assert.equal(res.body.data.user.email, 'bobby@example.com');
   });
 
   test('never returns the password hash', async () => {
     const res = await agent.post('/api/auth/register').send(validRegistration());
-    assert.equal(res.body.user.passwordHash, undefined);
+    assert.equal(res.body.data.user.passwordHash, undefined);
   });
 
   test('rejects a duplicate email with 409', async () => {
@@ -65,7 +65,7 @@ describe('POST /api/auth/register', () => {
 
   test('ignores a client-supplied role - registration only ever makes hackers', async () => {
     const res = await agent.post('/api/auth/register').send(validRegistration({ role: 'admin' }));
-    assert.equal(res.body.user.role, 'hacker');
+    assert.equal(res.body.data.user.role, 'hacker');
   });
 });
 
@@ -80,7 +80,7 @@ describe('POST /api/auth/login', () => {
       .send({ email: 'bobby@example.com', password: DEFAULT_PASSWORD });
 
     assert.equal(res.status, 200);
-    assert.ok(res.body.token);
+    assert.ok(res.body.data.token);
   });
 
   test('rejects a wrong password with 401', async () => {
@@ -107,14 +107,14 @@ describe('POST /api/auth/login', () => {
       .post('/api/auth/login')
       .send({ email: 'nobody@example.com', password: DEFAULT_PASSWORD });
 
-    assert.equal(wrongPassword.body.error, unknownEmail.body.error);
+    assert.deepEqual(wrongPassword.body.error, unknownEmail.body.error);
   });
 });
 
 describe('POST /api/auth/logout', () => {
   test('succeeds for an authenticated user', async () => {
     const reg = await agent.post('/api/auth/register').send(validRegistration());
-    const res = await agent.post('/api/auth/logout').set(bearer(reg.body.token));
+    const res = await agent.post('/api/auth/logout').set(bearer(reg.body.data.token));
 
     assert.equal(res.status, 200);
   });

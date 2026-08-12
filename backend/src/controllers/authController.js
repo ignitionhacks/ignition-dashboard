@@ -2,6 +2,7 @@ const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const { signToken } = require('../utils/token');
+const { ok, created } = require('../utils/apiResponse');
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -29,7 +30,7 @@ const register = catchAsync(async (req, res) => {
     role: 'hacker',
   });
 
-  res.status(201).json({ user, token: signToken(user) });
+  created(res, { user, token: signToken(user) });
 });
 
 /**
@@ -49,10 +50,10 @@ const login = catchAsync(async (req, res) => {
     '+passwordHash'
   );
 
-  const ok = user ? await user.verifyPassword(password) : false;
-  if (!ok) throw new ApiError(401, 'Invalid email or password');
+  const passwordMatches = user ? await user.verifyPassword(password) : false;
+  if (!passwordMatches) throw new ApiError(401, 'Invalid email or password');
 
-  res.json({ user, token: signToken(user) });
+  ok(res, { user, token: signToken(user) });
 });
 
 /**
@@ -64,7 +65,7 @@ const login = catchAsync(async (req, res) => {
  * instant revocation is ever needed.
  */
 const logout = (req, res) => {
-  res.json({ message: 'Logged out. Discard the token on the client.' });
+  ok(res, { message: 'Logged out. Discard the token on the client.' });
 };
 
 module.exports = { register, login, logout };

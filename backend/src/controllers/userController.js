@@ -2,6 +2,7 @@ const User = require('../models/User');
 const { ROLES } = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
+const { ok } = require('../utils/apiResponse');
 
 // Fields a user may change about themselves. Deliberately excludes `role`,
 // `status`, `email`, and `passwordHash` — a hacker must not be able to promote
@@ -13,7 +14,7 @@ const SELF_WRITABLE_FIELDS = ['firstName', 'lastName'];
  * Feeds the "Welcome, {firstName}!" header and gates role-specific UI.
  */
 const getMe = catchAsync(async (req, res) => {
-  res.json(req.user);
+  ok(res, req.user);
 });
 
 /**
@@ -26,7 +27,7 @@ const updateMe = catchAsync(async (req, res) => {
     if (req.body[field] !== undefined) user[field] = req.body[field];
   }
   await user.save();
-  res.json(user);
+  ok(res, user);
 });
 
 /**
@@ -36,7 +37,7 @@ const updateMe = catchAsync(async (req, res) => {
 const getUserById = catchAsync(async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) throw new ApiError(404, 'User not found');
-  res.json(user);
+  ok(res, user);
 });
 
 /**
@@ -55,7 +56,7 @@ const updateUserRole = catchAsync(async (req, res) => {
 
   user.role = role;
   await user.save();
-  res.json(user);
+  ok(res, user);
 });
 
 module.exports = { getMe, updateMe, getUserById, updateUserRole };

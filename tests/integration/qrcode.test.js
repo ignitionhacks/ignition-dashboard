@@ -58,9 +58,9 @@ describe('GET /api/qrcode/me', () => {
     const res = await agent.get('/api/qrcode/me').set(bearer(hacker.token));
 
     assert.equal(res.status, 200);
-    assert.equal(typeof res.body.code, 'string');
-    assert.ok(res.body.code.length > 0);
-    assert.equal(res.body.userId, hacker.user._id.toString());
+    assert.equal(typeof res.body.data.code, 'string');
+    assert.ok(res.body.data.code.length > 0);
+    assert.equal(res.body.data.userId, hacker.user._id.toString());
   });
 
   test('returns the SAME code on every later call, and creates no duplicate', async () => {
@@ -69,7 +69,7 @@ describe('GET /api/qrcode/me', () => {
     const first = await agent.get('/api/qrcode/me').set(bearer(hacker.token));
     const second = await agent.get('/api/qrcode/me').set(bearer(hacker.token));
 
-    assert.equal(second.body.code, first.body.code);
+    assert.equal(second.body.data.code, first.body.data.code);
     assert.equal(await QRCode.countDocuments(), 1);
   });
 
@@ -79,7 +79,7 @@ describe('GET /api/qrcode/me', () => {
     const a = await agent.get('/api/qrcode/me').set(bearer(hacker.token));
     const b = await agent.get('/api/qrcode/me').set(bearer(organizer.token));
 
-    assert.notEqual(a.body.code, b.body.code);
+    assert.notEqual(a.body.data.code, b.body.data.code);
   });
 
   test('concurrent first calls still yield one code, not a 500', async () => {
@@ -93,7 +93,7 @@ describe('GET /api/qrcode/me', () => {
 
     for (const res of responses) assert.equal(res.status, 200);
     assert.equal(await QRCode.countDocuments(), 1);
-    const codes = new Set(responses.map((r) => r.body.code));
+    const codes = new Set(responses.map((r) => r.body.data.code));
     assert.equal(codes.size, 1);
   });
 
@@ -110,7 +110,7 @@ describe('POST /api/qrcode/scan', () => {
     const roles = await seedRoles();
     const qr = await agent.get('/api/qrcode/me').set(bearer(roles.hacker.token));
     const event = await makeLunch();
-    return { ...roles, code: qr.body.code, event };
+    return { ...roles, code: qr.body.data.code, event };
   }
 
   test('rejects a hacker - hackers cannot check themselves in', async () => {
@@ -134,11 +134,11 @@ describe('POST /api/qrcode/scan', () => {
       .send({ code, scheduleEventId: event._id.toString() });
 
     assert.equal(res.status, 201);
-    assert.equal(res.body.alreadyCheckedIn, false);
-    assert.equal(res.body.attendance.checkedIn, true);
-    assert.equal(res.body.attendance.userId, hacker.user._id.toString());
-    assert.equal(res.body.attendance.scheduleEventId, event._id.toString());
-    assert.ok(res.body.attendance.checkedInAt);
+    assert.equal(res.body.data.alreadyCheckedIn, false);
+    assert.equal(res.body.data.attendance.checkedIn, true);
+    assert.equal(res.body.data.attendance.userId, hacker.user._id.toString());
+    assert.equal(res.body.data.attendance.scheduleEventId, event._id.toString());
+    assert.ok(res.body.data.attendance.checkedInAt);
   });
 
   test('records WHO scanned, for the audit trail', async () => {
@@ -149,7 +149,7 @@ describe('POST /api/qrcode/scan', () => {
       .set(bearer(organizer.token))
       .send({ code, scheduleEventId: event._id.toString() });
 
-    assert.equal(res.body.attendance.checkedInBy, organizer.user._id.toString());
+    assert.equal(res.body.data.attendance.checkedInBy, organizer.user._id.toString());
   });
 
   test('a mentor may also scan (§3.2.1)', async () => {
@@ -171,10 +171,10 @@ describe('POST /api/qrcode/scan', () => {
     const second = await agent.post('/api/qrcode/scan').set(bearer(organizer.token)).send(body);
 
     assert.equal(second.status, 200);
-    assert.equal(second.body.alreadyCheckedIn, true);
+    assert.equal(second.body.data.alreadyCheckedIn, true);
     assert.equal(
-      second.body.attendance.checkedInAt,
-      first.body.attendance.checkedInAt,
+      second.body.data.attendance.checkedInAt,
+      first.body.data.attendance.checkedInAt,
       'the first scan time must survive a re-scan'
     );
     assert.equal(await Attendance.countDocuments(), 1);
@@ -252,7 +252,7 @@ describe('GET /api/qrcode/:code/user', () => {
   async function lookupFixture() {
     const roles = await seedRoles();
     const qr = await agent.get('/api/qrcode/me').set(bearer(roles.hacker.token));
-    return { ...roles, code: qr.body.code };
+    return { ...roles, code: qr.body.data.code };
   }
 
   test('an organizer can resolve a code to its owner', async () => {
@@ -261,8 +261,8 @@ describe('GET /api/qrcode/:code/user', () => {
     const res = await agent.get(`/api/qrcode/${code}/user`).set(bearer(organizer.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body._id, hacker.user._id.toString());
-    assert.equal(res.body.email, 'bobby@example.com');
+    assert.equal(res.body.data._id, hacker.user._id.toString());
+    assert.equal(res.body.data.email, 'bobby@example.com');
   });
 
   test('an admin can too', async () => {

@@ -71,6 +71,10 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Reverse lookup for "who is on this team" - used by teamService.reconcile() and,
+// from phase 5, by the submission routes resolving a caller's team.
+userSchema.index({ teamId: 1 });
+
 /** Hash a plaintext password. Used by the auth controller before create/update. */
 userSchema.statics.hashPassword = function hashPassword(plaintext) {
   return bcrypt.hash(plaintext, BCRYPT_ROUNDS);

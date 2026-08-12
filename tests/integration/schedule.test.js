@@ -46,7 +46,7 @@ async function seedEvents() {
     location: 'Main Auditorium',
     category: 'Main',
   });
-  return { openingId: opening.body._id };
+  return { openingId: opening.body.data._id };
 }
 
 describe('access control', () => {
@@ -91,12 +91,12 @@ describe('POST /api/schedule', () => {
 
   test('trims whitespace from the title', async () => {
     const res = await createEvent({ title: '  Opening Ceremony  ' });
-    assert.equal(res.body.title, 'Opening Ceremony');
+    assert.equal(res.body.data.title, 'Opening Ceremony');
   });
 
   test('derives day from startTime', async () => {
     const res = await createEvent();
-    assert.equal(res.body.day, '2026-08-14');
+    assert.equal(res.body.data.day, '2026-08-14');
   });
 
   test('derives isFoodEvent from the category', async () => {
@@ -108,8 +108,8 @@ describe('POST /api/schedule', () => {
       endTime: undefined,
     });
 
-    assert.equal(main.body.isFoodEvent, false);
-    assert.equal(food.body.isFoodEvent, true);
+    assert.equal(main.body.data.isFoodEvent, false);
+    assert.equal(food.body.data.isFoodEvent, true);
   });
 });
 
@@ -147,13 +147,13 @@ describe('GET /api/schedule', () => {
   test('returns every valid event', async () => {
     await seedEvents();
     const res = await agent.get('/api/schedule').set(bearer(hacker.token));
-    assert.equal(res.body.count, 4);
+    assert.equal(res.body.data.count, 4);
   });
 
   test('sorts by startTime ascending', async () => {
     await seedEvents();
     const res = await agent.get('/api/schedule').set(bearer(hacker.token));
-    const times = res.body.events.map((e) => e.startTime);
+    const times = res.body.data.events.map((e) => e.startTime);
 
     assert.deepEqual(times, [...times].sort());
   });
@@ -161,13 +161,13 @@ describe('GET /api/schedule', () => {
   test('filters by day', async () => {
     await seedEvents();
     const res = await agent.get('/api/schedule?day=2026-08-14').set(bearer(hacker.token));
-    assert.equal(res.body.count, 3);
+    assert.equal(res.body.data.count, 3);
   });
 
   test('filters by category', async () => {
     await seedEvents();
     const res = await agent.get('/api/schedule?category=Food').set(bearer(hacker.token));
-    assert.equal(res.body.count, 1);
+    assert.equal(res.body.data.count, 1);
   });
 
   test('combines the day and category filters', async () => {
@@ -176,7 +176,7 @@ describe('GET /api/schedule', () => {
       .get('/api/schedule?day=2026-08-14&category=Main')
       .set(bearer(hacker.token));
 
-    assert.equal(res.body.count, 1);
+    assert.equal(res.body.data.count, 1);
   });
 
   test('rejects a malformed day', async () => {
@@ -191,7 +191,7 @@ describe('GET /api/schedule/:id and /upcoming', () => {
     const res = await agent.get(`/api/schedule/${openingId}`).set(bearer(hacker.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.title, 'Opening Ceremony');
+    assert.equal(res.body.data.title, 'Opening Ceremony');
   });
 
   test('returns 404 for a well-formed id that does not exist', async () => {
@@ -211,7 +211,7 @@ describe('GET /api/schedule/:id and /upcoming', () => {
     const res = await agent.get('/api/schedule/upcoming?limit=2').set(bearer(hacker.token));
 
     assert.equal(res.status, 200);
-    assert.ok(res.body.count <= 2, `expected at most 2 events, got ${res.body.count}`);
+    assert.ok(res.body.data.count <= 2, `expected at most 2 events, got ${res.body.data.count}`);
   });
 });
 
@@ -225,7 +225,7 @@ describe('PATCH and DELETE /api/schedule/:id', () => {
     });
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.location, 'Grand Hall');
+    assert.equal(res.body.data.location, 'Grand Hall');
   });
 
   test('re-derives day when startTime changes', async () => {
@@ -235,7 +235,7 @@ describe('PATCH and DELETE /api/schedule/:id', () => {
       endTime: '2026-08-15T10:00:00Z',
     });
 
-    assert.equal(res.body.day, '2026-08-15');
+    assert.equal(res.body.data.day, '2026-08-15');
   });
 
   test('re-runs validators on update', async () => {
@@ -254,7 +254,11 @@ describe('PATCH and DELETE /api/schedule/:id', () => {
     const remove = await agent.delete(`/api/schedule/${openingId}`).set(bearer(organizer.token));
     const after = await agent.get(`/api/schedule/${openingId}`).set(bearer(hacker.token));
 
-    assert.equal(remove.status, 204);
+    // 200 with a body, not 204: SS5 lists 200 for a successful DELETE and lists
+    // no 204, and a 204 has no body to carry the response envelope in.
+    assert.equal(remove.status, 200);
+    assert.equal(remove.body.data.deleted, true);
+    assert.equal(remove.body.data.id, openingId);
     assert.equal(after.status, 404);
   });
 });

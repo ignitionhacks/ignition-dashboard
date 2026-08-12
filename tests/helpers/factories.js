@@ -38,7 +38,7 @@ async function makeUserAndToken(agent, options = {}) {
   const res = await agent
     .post('/api/auth/login')
     .send({ email: user.email, password: options.password || DEFAULT_PASSWORD });
-  return { user, token: res.body.token };
+  return { user, token: res.body.data.token };
 }
 
 /** A valid Schedule Event payload; override any field per test. */

@@ -3,6 +3,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const { connectDB } = require('../config/db');
 const ScheduleEvent = require('../models/ScheduleEvent');
+const HackathonConfig = require('../models/HackathonConfig');
 
 // Sample events across the two days shown in the Figma (Fri Aug 14 / Sat Aug 15).
 const SAMPLE_EVENTS = [
@@ -63,6 +64,14 @@ const SAMPLE_EVENTS = [
   },
 ];
 
+// The singleton config (§1.2.3) so a fresh dev database has a working countdown
+// instead of a 404. Matches the sample events above: Fri Aug 14 -> Sat Aug 15.
+const SAMPLE_CONFIG = {
+  hackathonStartAt: '2026-08-14T10:00:00Z',
+  hackathonEndAt: '2026-08-15T09:00:00Z',
+  submissionDeadline: '2026-08-15T09:00:00Z',
+};
+
 async function seed() {
   // `ignition-dashboard-dev` is shared by the whole team, and this script wipes
   // the collection before inserting. Require an explicit opt-in so nobody
@@ -70,8 +79,8 @@ async function seed() {
   if (!process.argv.includes('--yes')) {
     console.error(
       '[seed] REFUSING TO RUN.\n' +
-        '       This DELETES every schedule event in the target database, which is\n' +
-        '       shared with the rest of the team.\n\n' +
+        '       This DELETES every schedule event AND the hackathon config in the\n' +
+        '       target database, which is shared with the rest of the team.\n\n' +
         '       Check the db name at the end of MONGO_URI in your .env first, then:\n' +
         '           npm run seed -- --yes\n'
     );
@@ -85,6 +94,11 @@ async function seed() {
     await ScheduleEvent.deleteMany({});
     const created = await ScheduleEvent.insertMany(SAMPLE_EVENTS);
     console.log(`[seed] Inserted ${created.length} schedule events.`);
+
+    // The config is a singleton, so replace it rather than inserting a second one.
+    await HackathonConfig.deleteMany({});
+    await HackathonConfig.create(SAMPLE_CONFIG);
+    console.log('[seed] Wrote the hackathon config (start, end, submission deadline).');
   } catch (err) {
     console.error('[seed] Failed:', err.message);
     process.exitCode = 1;

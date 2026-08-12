@@ -3,7 +3,7 @@
 Hand-testing script for things the automated suite can't prove. Tick the **Passed**
 column as you go; leave it blank until you've actually seen the result.
 
-The automated suite (`cd tests && npm test`, 161 tests) already covers all the API logic
+The automated suite (`cd tests && npm test`, 335 tests) already covers all the API logic
 against an in-memory database. **What it cannot cover is everything involving the real
 Atlas cluster, the real server process, and Postman** — that's what sections 1, 6 and 7
 are for.
@@ -14,6 +14,27 @@ are for.
 > the same row it did before.
 
 **Tools:** Postman (or curl). Base URL `http://localhost:4000`.
+
+> ## ⚠️ Every response shape changed — 2026-08-12
+>
+> The API now wraps **every** `/api` response in the §5 envelope:
+> `{ "success": true, "data": { ... } }` or
+> `{ "success": false, "error": { "code", "message" } }`.
+>
+> **What that means for this script:** wherever a row below says a response contains
+> `token`, `count`, `events`, `checklist`, `role`, … that field is now one level deeper,
+> under **`data`**. `{ count, events }` is now `data.count` / `data.events`; `token` is
+> now `data.token`. Error rows that used to show `{ "error": "..." }` now show
+> `{ "error": { "code": "...", "message": "..." } }`.
+>
+> The **✅ marks below are from the pre-envelope run** and still stand for status codes
+> and behaviour — but the body shapes were re-verified by the automated suite, not by
+> hand. Re-run §12 (new) to confirm the contract itself.
+>
+> Two behaviour changes, not just re-shaping:
+> - **`DELETE /api/schedule/:id` now returns `200` with a body, not `204` empty** (row
+>   5.14, re-blanked below).
+> - **`GET /health` is deliberately exempt** and still returns a bare `{ "status": "ok" }`.
 
 > ## Run log — 2026-07-27, Abdullah
 >
@@ -32,9 +53,13 @@ are for.
 
 Every request below is pre-built in
 [`postman/ignition-dashboard.postman_collection.json`](postman/ignition-dashboard.postman_collection.json)
-— 104 requests across 11 folders. Postman → **Import** → drag the file in.
-**If you imported an earlier copy, delete that collection first and re-import** — folders
-9, 10 and 11 are new, and so are eleven collection variables.
+— **216 requests across 16 folders**. Postman → **Import** → drag the file in.
+**If you imported an earlier copy, delete that collection first and re-import** — the whole
+collection was rewritten for the response envelope on 2026-08-12, folders 12, 13, 14, 16
+and 17 are new, and so are 33 collection variables.
+
+**Folder numbers match the section numbers in this file**, so you can run the two side by
+side. There is no folder 15, because §15 is Teams and teams have no HTTP surface at all.
 
 Tokens and ids are captured into collection variables automatically, so you never
 copy-paste a token. **Run the folders in numbered order** — folder 5 creates the events
@@ -44,9 +69,26 @@ in Atlas.
 The collection asserts status codes for you, but it does **not** replace looking at the
 responses. Rows 2.2, 4.3, 4.4 and 8.1–8.3 need your eyes on the actual body.
 
-Folder 8 deletes the QA events again — `ignition-dashboard-dev` is shared, so run it. It
-does **not** clean up `qrcodes` and `attendance`; there's no delete route for either, so
-those come out by hand in Atlas.
+> **Every request also carries a collection-level envelope check** (Collection → Scripts →
+> Post-response): `success` must match the status code, a 4xx/5xx must carry
+> `error.code` and `error.message`, and no error body may leak a stack trace. It runs on
+> all 216 requests, so an envelope regression fails everywhere at once instead of only
+> where someone remembered to assert it. `GET /health` is excluded — see 12.13.
+
+**Cleanup folders — please run them.** `ignition-dashboard-dev` is shared. Folder 8 deletes
+the QA events, folder 11 the QR/attendance events, folder 13's last four rows the QA
+announcements, and folder 17 sweeps up after 12–16. None of them can clean `qrcodes`,
+`attendance`, `submissions` or `teams` — no delete route exists for any of those — so
+folder 17 prints the `mongosh` commands for the ones it finds and you finish in Atlas.
+
+> **Folder 16 uses four accounts of its own** (`qa-alpha-1`, `qa-alpha-2`, `qa-noteam`,
+> `qa-beta-1`) and its own teams, "QA Team Alpha" and "QA Team Beta" — *not* §15's "QA
+> Team". A submission is per **team**, so pointing the folder at a team you also submitted
+> for by hand would mean sharing that team's one submission slot, and the folder would stop
+> being re-runnable. The folder description maps its accounts onto §16's hacker1/2/3.
+
+> **Folder 14 rewrites the shared hackathon config.** 14.0.4 saves whatever is there and
+> 14.16 puts it back. If you stop that folder half way, restore the dates by hand.
 
 **Folders 9, 10 and 11 work differently from 1–8, on purpose.**
 
@@ -195,7 +237,7 @@ section 7.1 for how to get the first one.
 | 5.11 | `PATCH` sending `"day":"1999-01-01"` | Ignored; `day` still derived from `startTime` | ✅ |
 | 5.12 | `PATCH /api/schedule/:id` as a hacker | `403` | ✅ |
 | 5.13 | `DELETE /api/schedule/:id` as a hacker | `403` | ✅ |
-| 5.14 | `DELETE /api/schedule/:id` as an organizer | `204`, empty body | ✅ |
+| 5.14 | `DELETE /api/schedule/:id` as an organizer | `200`, `data.deleted: true`, `data.id` = the id — **not** an empty `204` (changed 2026-08-12) | |
 | 5.15 | `GET` that same id again | `404` | ✅ |
 
 ---
@@ -380,6 +422,233 @@ be deleted for real.
 
 ---
 
+## 12. Response envelope and error contract (§5)
+
+New 2026-08-12. Postman folder 12 runs all of this. Nothing here needs a fresh database —
+it reuses whatever is already there.
+
+| # | Request | Expected result | Passed |
+| - | ------- | --------------- | ------ |
+| 12.1 | `GET /api/users/me` with a valid token | `200`, body has `success: true` and a `data` object, and **no** `error` key | |
+| 12.2 | `GET /api/schedule` | `200`, `data.count` equals `data.events.length` | |
+| 12.3 | `POST /api/schedule` as an organizer | `201`, the new event is in `data`, `data._id` present | |
+| 12.4 | `GET /api/schedule/64b7f0000000000000000000` | `404`, `error.code` is `NOT_FOUND`, `error.message` non-empty | |
+| 12.5 | `POST /api/schedule` with `"title": "   "` | `400`, `error.code` is `VALIDATION_ERROR`, `error.details` is a non-empty array | |
+| 12.6 | `GET /api/schedule/not-an-id` | `400`, `error.code` is `VALIDATION_ERROR` | |
+| 12.7 | `GET /api/schedule?day=Aug-14` | `400`, `error.code` is `BAD_REQUEST`, and **no** `details` key | |
+| 12.8 | `GET /api/schedule` with no token | `401`, `error.code` is `UNAUTHORIZED` | |
+| 12.9 | `POST /api/schedule` as a hacker | `403`, `error.code` is `FORBIDDEN` | |
+| 12.10 | `POST /api/auth/register` with an email that already exists | `409`, `error.code` is `CONFLICT` | |
+| 12.11 | `GET /api/nope` | `404` in the failure envelope — JSON, not an HTML error page | |
+| 12.12 | Look at any error body from 12.4–12.11 | Only `code`, `message` and (on 12.5) `details`. **No stack trace, no `name`** | |
+| 12.13 | `GET /health` | `200`, bare `{ "status": "ok" }` — **no** `success` key. This exemption is intentional | |
+| 12.14 | `DELETE /api/schedule/<id>` as an organizer | `200` with `data.deleted: true` and `data.id`. Then `GET` that id → `404` | |
+
+> **12.7 vs 12.5 are different on purpose.** `VALIDATION_ERROR` means a field failed a
+> schema validator and `details` says which. `BAD_REQUEST` means the request itself was
+> malformed before any document was involved. A client can rely on
+> "`details` present ⇒ it was field validation".
+
+---
+
+## 13. Announcements (§1.2.2)
+
+New 2026-08-12. Postman folder 13 (added in Phase 6) runs all of this. You need **three**
+tokens: a hacker, an organizer and an admin. Sections 2–3 already show how to get them.
+
+Every response here is enveloped — read the values out of `data`, not off the top level.
+
+| # | Request | Expected result | Passed |
+| - | ------- | --------------- | ------ |
+| 13.1 | `GET /api/announcements` with **no** token | `401`, `error.code` is `UNAUTHORIZED` | |
+| 13.2 | `GET /api/announcements` as a **hacker** | `200`. Any role may read the feed | |
+| 13.3 | `POST /api/announcements` as a **hacker**, body `{"body":"I am not an organizer."}` | `403`, `error.code` is `FORBIDDEN`. This is §4's "enforced at the authorization layer" | |
+| 13.4 | `POST /api/announcements` as an **organizer**, `{"title":"QA - Lunch","body":"Lunch is in the cafeteria."}` | `201`. `data.pinned` is `false`, `data.postedAt` is set. **Save `data._id` as `ANN_ID`** | |
+| 13.5 | Look at 13.4's `data.authorName` | It is the **organizer's** full name, not anything you sent | |
+| 13.6 | `POST /api/announcements` as an organizer with `{"body":"QA - spoofed","authorId":"<hacker id>","authorName":"Somebody Else"}` | `201`, but `data.authorId` / `data.authorName` are still **yours**. The body cannot set the author | |
+| 13.7 | `POST /api/announcements` as an organizer with `{"title":"QA - no body"}` | `400`, `error.code` is `VALIDATION_ERROR`, `error.details` non-empty | |
+| 13.8 | `POST /api/announcements` as an organizer with `{"body":"QA - untitled"}` | `201`, `data.title` is `""`. Title is optional (§1.2.2) | |
+| 13.9 | `POST /api/announcements` as an **admin** | `201`. Admins post too | |
+| 13.10 | `GET /api/announcements` again | Newest first. The most recent thing you posted is `data.announcements[0]` | |
+| 13.11 | `PATCH /api/announcements/{{ANN_ID}}` as an organizer, `{"pinned":true}` | `200`, `data.pinned` is `true` | |
+| 13.12 | `GET /api/announcements` after 13.11 | `ANN_ID` is now **first**, above the newer ones. Pinned outranks recent | |
+| 13.13 | `PATCH /api/announcements/{{ANN_ID}}`, `{"body":"QA - lunch moved to the atrium."}` | `200`, body changed and `data.postedAt` is **unchanged** — an edit must not re-order the feed | |
+| 13.14 | `GET /api/announcements?limit=2&page=1`, then `page=2` | Two rows then the rest, **no overlap**. `data.total` is the same on both and counts the whole collection; `data.count` is that page's length | |
+| 13.15 | `GET /api/announcements?limit=999`, then `?limit=abc`, then `?page=0` | All `200`. `data.limit` is `50`, then `10`; `data.page` is `1`. Clamped, never rejected | |
+| 13.16 | `GET /api/announcements?page=99` | `200` with `data.count: 0` — an empty page, **not** a `404` | |
+| 13.17 | `PATCH /api/announcements/{{ANN_ID}}` as a **hacker** | `403` | |
+| 13.18 | `DELETE /api/announcements/{{ANN_ID}}` as a **hacker** | `403`, and the announcement is still in the feed | |
+| 13.19 | `DELETE /api/announcements/{{ANN_ID}}` as an organizer | `200` with `data.deleted: true` and `data.id`. Re-run `GET` — it's gone | |
+| 13.20 | `DELETE /api/announcements/000000000000000000000000` | `404`. And `DELETE /api/announcements/not-an-id` → `400` | |
+| 13.21 | **Cleanup:** delete every announcement titled `QA - …` you created above | Feed has no `QA -` rows left. `ignition-dashboard-dev` is shared | |
+
+> **13.5/13.6 are the point of the whole section.** The author is read off the token, so
+> nobody can post under someone else's name even by hand-crafting the request.
+
+> **`authorName` is a snapshot.** If you rename that organizer via
+> `PATCH /api/users/me` afterwards, the old announcements keep the old name. That's
+> deliberate (a feed shows who posted it *then*), not a stale-data bug.
+
+> **There is no `GET /api/announcements/:id`.** §1.2.2 lists no such route — read items
+> back through the feed. A request to it returns `404` from the catch-all, which is
+> correct, not a missing feature.
+
+---
+
+## 14. Hackathon config + countdown (§1.2.3)
+
+New 2026-08-12. Postman folder 14 (added in Phase 6) runs all of this. You need a
+**hacker**, an **organizer** and an **admin** token.
+
+⚠️ **This section writes the shared config.** `ignition-dashboard-dev` is the whole team's
+database, and there is only ever **one** config document — if the team has already set
+real hackathon dates, **write them down before you start** and restore them in 14.16.
+
+| # | Request | Expected result | Passed |
+| - | ------- | --------------- | ------ |
+| 14.1 | `GET /api/config/hackathon` with **no** token | `401`, `error.code` is `UNAUTHORIZED` | |
+| 14.2 | `GET /api/config/hackathon` **before** anything is configured | `404`, `error.code` is `NOT_FOUND`. Not an empty object, not invented dates. *(Skip if the team already set one — record that instead.)* | |
+| 14.3 | `PUT /api/config/hackathon` as a **hacker** | `403`, `error.code` is `FORBIDDEN` | |
+| 14.4 | `PUT /api/config/hackathon` as an **organizer** | `403`. This route is **admin-only**, unlike schedule/announcement writes | |
+| 14.5 | `PUT` as an **admin** with `{"hackathonStartAt":"<1h ago>","hackathonEndAt":"<2h from now>"}` | `200`, `data` echoes both times. **Save `data._id`** | |
+| 14.6 | `GET /api/config/hackathon` as a **hacker** | `200` — every role can read the countdown | |
+| 14.7 | Look at `data.countdown` from 14.6 | `hasStarted: true`, `hasEnded: false`, `msRemaining` > 0, `formatted` looks like `01:59:58` | |
+| 14.8 | `GET` again ~5 seconds later | `msRemaining` is **smaller**. It's computed per request, never stored | |
+| 14.9 | Compare `data.serverTime` to your own clock | Within a second or two. This is what the frontend uses to correct for clock skew | |
+| 14.10 | `PUT` again as admin with a **different** `hackathonEndAt` | `200`, and `data._id` is the **same as 14.5** — it updated, it didn't create a second config | |
+| 14.11 | `PUT` as admin with `hackathonEndAt` **before** `hackathonStartAt` | `400`, `error.code` is `VALIDATION_ERROR`, `error.details` non-empty | |
+| 14.12 | `PUT` as admin sending **only** `hackathonEndAt` | `400`. `PUT` is a full replace — always send both times | |
+| 14.13 | `PUT` as admin with a `submissionDeadline`, then `PUT` again **without** it | First response has the deadline, second has `submissionDeadline: null`. Omitting it **clears** it — that's what `PUT` means | |
+| 14.14 | `PUT` as admin with both times **in the past** | `200`. Then `GET`: `msRemaining` is exactly `0`, `formatted` is `"00:00:00"`, `hasEnded: true`. It never goes negative | |
+| 14.15 | `PUT` as admin with both times **in the future** | `GET` shows `hasStarted: false` and a countdown to the end | |
+| 14.16 | **Restore:** `PUT` the team's real dates back (or the ones you noted at the top) | `GET` shows the right dates again | |
+| 14.17 | `GET /api/schedule/upcoming?limit=5` | `200`, at most 5 events, soonest first, all with `startTime` in the future. §1.2.3 lists this next to the countdown | |
+
+> **14.7's `formatted` does not wrap at 24 hours.** A 48-hour hackathon shows `47:59:59`,
+> not `23:59:59`. If you ever see a value under 24h when more than a day remains, that's a
+> real bug.
+
+> **There is no `DELETE` for the config.** Nothing in §1.2.3 asks for one, and an
+> unsettable countdown is a worse failure mode than a wrong one. Overwrite it with `PUT`,
+> or remove the `hackathonconfigs` document in Atlas by hand.
+
+---
+
+## 15. Teams (§7) — command line, not Postman
+
+New 2026-08-12. **There is no Postman folder for this and there never will be**: §5's
+router list has no team router, so teams have no HTTP surface at all. Everything here is
+`backend/src/scripts/manageTeams.js`. See
+[README.md](README.md#team-7--provisioned-by-script-not-by-api) for why.
+
+Run every command from `backend/`, with `MONGO_URI` in `backend/.env` pointing at
+`ignition-dashboard-dev`. **This section writes to the shared database**, but only ever
+*adds* — the script has no delete path, so the worst case is a leftover "QA Team" row you
+can drop in Atlas afterwards.
+
+You need two hacker accounts. `bobby@example.com` and a second one from section 2 are
+fine — substitute your real emails below.
+
+| # | Command | Expected result | Passed |
+| - | ------- | --------------- | ------ |
+| 15.1 | `node src/scripts/manageTeams.js` (no arguments) | Prints usage, exits `0`, connects to nothing | |
+| 15.2 | `node src/scripts/manageTeams.js list` | Connects, prints the teams that exist (or "No teams yet") | |
+| 15.3 | `node src/scripts/manageTeams.js create "QA Team"` | `Created "QA Team" (<id>). No members yet.` | |
+| 15.4 | `create "qa team"` again | `FAILED: A team named "qa team" already exists`, exit `1`. The unique index ignores case | |
+| 15.5 | `add "qa team" <hacker1 email>` | `Added …`, roster shows `[1/4]`. Note the team name lookup is also case-insensitive | |
+| 15.6 | `add "QA Team" <hacker1 email>` again | Succeeds again, roster still `[1/4]`. Re-running is safe, not a duplicate | |
+| 15.7 | `add "QA Team" nobody@example.com` | `FAILED: No user with email …`, exit `1` | |
+| 15.8 | `add "No Such Team" <hacker1 email>` | `FAILED: No team named …`, exit `1` | |
+| 15.9 | `create "QA Team Two"` then `add "QA Team Two" <hacker1 email>` | `FAILED: … is already on another team`. **This is the important one** — one user, one team | |
+| 15.10 | `add "QA Team" <hacker2 email>` | Roster shows `[2/4]` | |
+| 15.11 | `GET /api/users/me` in Postman as **hacker1** | `data.teamId` is the QA Team's `_id`. The script and the API agree | |
+| 15.12 | `PATCH /api/users/me` as hacker1 with `{"teamId":"000000000000000000000001"}` | `200`, and `data.teamId` is **unchanged**. A hacker cannot join a team through their profile | |
+| 15.13 | `remove "QA Team" <hacker1 email>` | Roster drops to `[1/4]`; `GET /api/users/me` now shows `teamId: null` | |
+| 15.14 | `remove "QA Team" <hacker1 email>` again | Succeeds, roster still `[1/4]`. Removing a non-member is a no-op | |
+| 15.15 | `reconcile` | `0 user(s) linked, 0 cleared, 0 stale member(s) dropped` on a healthy database | |
+| 15.16 | Point `MONGO_URI` at a portal database and run `list` | `FAILED: MONGO_URI points at a portal database. Refusing …`, exit `1`, **no connection opened**. Put your real URI back afterwards | |
+| 15.17 | `add "QA Team" <hacker1 email>` once more, so both hackers are on it | Roster shows `[2/4]`. Section 16 starts from here | |
+
+> **15.9 is the invariant everything else rests on.** A user on two teams makes "the
+> team's submission" ambiguous. If this ever succeeds, stop and file it.
+
+> **15.15's `reconcile` is a repair tool, not routine maintenance.** It only has work to do
+> if a script died between its two writes (the team write and the user write — there are no
+> transactions on the free Atlas tier). Non-zero counts on a database nobody interrupted
+> are worth investigating.
+
+---
+
+## 16. Project Submission (§1.2.4)
+
+New 2026-08-12. Postman folder 16 (added in Phase 6) runs all of this.
+
+⚠️ **Something has to create a team first.** A submission belongs to a *team*, and teams
+only exist once `manageTeams.js` has made one — there is no HTTP way to create one.
+
+**Running it in Postman?** Folder 16 brings its own accounts and its own teams. Run rows
+16.0.1–16.0.4 to create the accounts, then the five `manageTeams.js` commands in the
+folder's description, then the rest of the folder. You can skip the by-hand list below —
+16.0.11 fails with a message naming the commands if you missed them.
+
+**Doing it by hand?** Run section 15 first; nothing below works until 15.17 leaves two
+hackers on "QA Team". Then you need five things:
+
+- **hacker1** and **hacker2**, both on "QA Team" (section 15)
+- **hacker3**, on **no** team at all — a fresh account from section 2 is fine
+- an **organizer** token and an **admin** token
+- "QA Team Two" from 15.9, with **hacker3** *not* on it — 16.18 needs a hacker on a
+  *different* team, so `add "QA Team Two" <hacker4 email>` if you have a fourth account,
+  otherwise skip 16.18 and note it
+
+⚠️ **16.23–16.26 write the shared hackathon config.** Same warning as section 14 — note the
+team's real dates down first and restore them in 16.26.
+
+| # | Request | Expected result | Passed |
+| - | ------- | --------------- | ------ |
+| 16.1 | `GET /api/submissions/mine` with **no** token | `401`, `error.code` is `UNAUTHORIZED` | |
+| 16.2 | `GET /api/submissions/mine` as **hacker3** (no team) | `200` with `"data": null`. **Not a `404`, not a `409`** — "no team, nothing submitted" is a normal state the Home page renders | |
+| 16.3 | `GET /api/submissions/mine` as **hacker1**, before submitting | `200` with `"data": null`. Same reason | |
+| 16.4 | `GET /api/submissions` (no `/mine`) as **hacker1** | `403`, `error.code` is `FORBIDDEN`. The judging list is not for hackers | |
+| 16.5 | `POST /api/submissions` as an **organizer** | `403`. An organizer has no team, so there is nothing for them to submit | |
+| 16.6 | `POST /api/submissions` as **hacker3** with a valid body | `409`, `error.code` is **`NO_TEAM`** — a distinct code from the "already submitted" 409 below, so the frontend can tell them apart | |
+| 16.7 | `POST` as **hacker1** with `{"description":"no title"}` | `400`, `error.code` is `VALIDATION_ERROR`, `error.details` names `title` | |
+| 16.8 | `POST` as hacker1 with a `title` longer than **200** characters | `400`, `error.details` names `title`. `description` has the same guard at **5000** | |
+| 16.9 | `POST` as hacker1 with `{"title":"x","description":"y","repoUrl":"github.com/example/x"}` | `400` — a URL must start with `http://` or `https://`. Add the scheme and it passes | |
+| 16.10 | `POST /api/submissions` as **hacker1** with `{"title":"Study Buddy","description":"Pairs students by course.","teamId":"<QA Team Two's id>","submittedBy":"<organizer id>"}` | `201` — and `data.teamId` is **QA Team's** id, `data.submittedBy` is **hacker1's** id. Both spoofed values are ignored; they come from the token. `data.submittedAt` is now, `devpostUrl` and `repoUrl` are `null`. **Save `data._id`** | |
+| 16.11 | The exact same `POST` again | `409` — one submission per team. The message tells you to edit it instead | |
+| 16.12 | The same `POST` as **hacker2** | `409` as well. It is the *team's* submission, not hacker1's | |
+| 16.13 | `GET /api/submissions/mine` as **hacker1** | `200`, `data._id` matches 16.10 | |
+| 16.14 | `GET /api/submissions/mine` as **hacker2** | `200`, **the same `_id`**. This is §4's "every teammate sees the same submission state" — the one behaviour worth testing by hand | |
+| 16.15 | `PATCH /api/submissions/<id>` as **hacker2** with `{"title":"Study Buddy v2","devpostUrl":"https://devpost.com/software/study-buddy"}` | `200`, both fields changed. A teammate may edit — nobody appointed hacker1 the owner | |
+| 16.16 | `PATCH` as hacker1 with `{"teamId":"000000000000000000000001","submittedBy":"000000000000000000000001","submittedAt":"2000-01-01T00:00:00Z"}` | `200`, and all three are **unchanged**. `updatedAt` moves, `submittedAt` does not — an edit must not move the timestamp on a judging sheet | |
+| 16.17 | `PATCH` as **hacker3** (no team) | `403` | |
+| 16.18 | `PATCH` as a hacker on **QA Team Two** | `403`. The check runs *before* the deadline check, so an outsider can't even learn whether submissions are open | |
+| 16.19 | `PATCH /api/submissions/not-an-id` | `400`, `error.code` is `VALIDATION_ERROR` (a `CastError`, mapped by the central handler) | |
+| 16.20 | `PATCH /api/submissions/000000000000000000000001` as hacker1 | `404` | |
+| 16.21 | `GET /api/submissions` as an **organizer** | `200`, `data.count` matches `data.submissions.length`, newest `submittedAt` first | |
+| 16.22 | `GET /api/submissions/<id>` as an organizer | `404` from the catch-all. **There is no `GET /:id`** — §1.2.4 lists none, and the judging list already carries every field | |
+| 16.23 | As **admin**, `PUT /api/config/hackathon` with `submissionDeadline` **in the past** (keep the start/end times valid), then `PATCH` as hacker1 | `403`, `error.code` is **`SUBMISSION_CLOSED`**, message names the deadline | |
+| 16.24 | With that deadline still in the past, `POST` as the **QA Team Two** hacker from 16.18 (their team hasn't submitted) | `403` `SUBMISSION_CLOSED` as well — the window closes for new submissions and edits alike. *(Skip with 16.18 if you only have three accounts.)* | |
+| 16.25 | `PUT` the config again **without** `submissionDeadline`, and with `hackathonEndAt` in the past | `PATCH` is still `403` `SUBMISSION_CLOSED`. With no explicit deadline the hackathon's end **is** the deadline | |
+| 16.26 | **Restore:** `PUT` the team's real dates back, then `PATCH` as hacker1 | `200`. Submissions are open again | |
+
+> **16.2/16.3 are the ones people file as bugs.** "Not submitted yet" is `200` + `null`, on
+> purpose: the Home page's Submit button reads that response to choose between its two
+> faces, and a `404` would force the frontend to treat a normal state as an error.
+
+> **16.16 is the whole security model in one row.** `teamId` and `submittedBy` come from
+> the token and are never read from the body — on create *or* update. If either ever
+> echoes back what you sent, stop and file it: it means a hacker can submit for any team,
+> under anyone's name.
+
+> **If a deadline is set and nothing is rejected, check the config first.** With **no**
+> config document at all the API deliberately **fails open** — it allows the write and logs
+> a warning to the server console. Look for `[submissions] No hackathon config is set` in
+> the terminal running the backend before assuming the deadline check is broken.
+
+---
+
 ## Known limitations (not bugs — don't file these)
 
 - **Times are UTC.** `day` is derived from `startTime` in UTC. An event at 8pm EDT on
@@ -397,9 +666,46 @@ be deleted for real.
 - **Deleting an event doesn't delete its attendance records.** They're left pointing at an
   event id that no longer exists. Harmless for a weekend hackathon, but it means event
   ids should be treated as permanent once anyone has been scanned.
+- **`GET /health` is not enveloped.** Deliberate: it is an ops/liveness endpoint mounted
+  outside `/api` and uptime probes match its literal `{ "status": "ok" }` body.
+- **There's no way to delete the hackathon config.** `PUT` overwrites it; there is no
+  `DELETE`. §1.2.3 doesn't ask for one, and the only way back to "unset" is removing the
+  document in Atlas.
+- **The submission deadline is a hard cutoff with no grace period.** One millisecond past
+  it, `POST` and `PATCH` are `403`. There is no "submitted late" flag and no way to reopen
+  the window for one team — an organizer moves `submissionDeadline` for everybody or for
+  nobody. Deliberate: a per-team exception is a policy decision, not a backend feature.
+- **No hackathon config means no deadline at all.** The check **fails open**: with no
+  config document, every submission is allowed and the server logs
+  `[submissions] No hackathon config is set`. Locking every team out because an admin
+  forgot to run one `PUT` is the worse failure, so this is on purpose — but it does mean
+  "the deadline isn't working" is usually "the config was never set".
+- **Announcements have no read/unread state.** §1.2.2 says so explicitly, so there's no
+  "new" badge and no way to mark one read. Every user sees the same feed.
+- **Deleting a user doesn't touch their announcements.** `authorId` is left pointing at a
+  missing user, and `authorName` keeps rendering, so the feed still reads correctly. Same
+  trade-off as attendance records pointing at deleted events.
 - **The checklist is Food-only.** §3.2.2 describes it as the meal checklist, so workshops
   are excluded. If the team wants workshop attendance on the Profile page that's a
   one-line filter change — pending a decision.
+- **Teams cannot be created or joined over HTTP.** §5's router list has no team router, so
+  the only way in is `manageTeams.js` (section 15). That is the deliberate cost of
+  following the doc, not an oversight — and it means testing the submission routes needs
+  one CLI command first. Adding a `teamRouter` later is additive; the service already
+  holds every rule.
+- **A team can't be renamed or deleted.** `manageTeams.js` only creates and links, on
+  purpose — it is run against the shared database. Renaming or removing a team means
+  editing the `teams` collection in Atlas.
+- **Max team size 4 is an assumption.** The design doc never states a limit; this is
+  Ignition Hacks' published rule. It's one constant (`Team.MAX_TEAM_SIZE`) if the answer
+  turns out to be different.
+- **A submission can't be deleted, and an organizer can't edit one.** §1.2.4 lists neither,
+  so there is no `DELETE` and the write routes are hacker-only. A team that submits the
+  wrong project edits it; a typo an organizer spots has to go back to the team, or be
+  fixed in the `submissions` collection in Atlas.
+- **There is no `GET /api/submissions/:id`.** The judging list returns every field of every
+  submission already, so a per-id read would add a route without adding information.
+  Hackers read theirs through `/mine`.
 
 ## Actual bugs found by this script
 

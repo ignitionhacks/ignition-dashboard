@@ -5,6 +5,8 @@ const ScheduleEvent = require('../models/ScheduleEvent');
 const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
+// Only `ok` is imported: `created` is already a local variable name in this file.
+const { ok } = require('../utils/apiResponse');
 
 /**
  * Attendance checklist, headcount and manual entry (design doc §3.2.2).
@@ -65,7 +67,7 @@ const getMyChecklist = catchAsync(async (req, res) => {
     };
   });
 
-  res.json({ count: checklist.length, checklist });
+  ok(res, { count: checklist.length, checklist });
 });
 
 /**
@@ -92,7 +94,7 @@ const getEventAttendance = catchAsync(async (req, res) => {
     user: byUserId.get(record.userId.toString()) || null,
   }));
 
-  res.json({ count: attendance.length, scheduleEventId: event._id, attendance });
+  ok(res, { count: attendance.length, scheduleEventId: event._id, attendance });
 });
 
 /**
@@ -121,7 +123,7 @@ const createAttendance = catchAsync(async (req, res) => {
     checkedInBy: req.user._id,
   });
 
-  res.status(created ? 201 : 200).json({ alreadyCheckedIn: !created, attendance });
+  ok(res, { alreadyCheckedIn: !created, attendance }, created ? 201 : 200);
 });
 
 module.exports = { getMyChecklist, getEventAttendance, createAttendance };

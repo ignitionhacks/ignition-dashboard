@@ -74,7 +74,7 @@ async function scanInto(organizerToken, userToken, event) {
   return agent
     .post('/api/qrcode/scan')
     .set(bearer(organizerToken))
-    .send({ code: qr.body.code, scheduleEventId: event._id.toString() });
+    .send({ code: qr.body.data.code, scheduleEventId: event._id.toString() });
 }
 
 describe('GET /api/attendance/me', () => {
@@ -90,9 +90,9 @@ describe('GET /api/attendance/me', () => {
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.count, 2, 'both Food events must appear');
-    assert.ok(Array.isArray(res.body.checklist));
-    for (const row of res.body.checklist) {
+    assert.equal(res.body.data.count, 2, 'both Food events must appear');
+    assert.ok(Array.isArray(res.body.data.checklist));
+    for (const row of res.body.data.checklist) {
       assert.equal(row.checkedIn, false);
       assert.equal(row.checkedInAt, null);
     }
@@ -104,7 +104,7 @@ describe('GET /api/attendance/me', () => {
 
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
 
-    const titles = res.body.checklist.map((r) => r.title);
+    const titles = res.body.data.checklist.map((r) => r.title);
     assert.deepEqual(titles.includes('Intro to React'), false);
   });
 
@@ -115,7 +115,7 @@ describe('GET /api/attendance/me', () => {
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
 
     assert.deepEqual(
-      res.body.checklist.map((r) => r.title),
+      res.body.data.checklist.map((r) => r.title),
       ['Lunch', 'Dinner']
     );
   });
@@ -125,7 +125,7 @@ describe('GET /api/attendance/me', () => {
     const { lunch } = await seedEvents();
 
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
-    const row = res.body.checklist.find((r) => r.title === 'Lunch');
+    const row = res.body.data.checklist.find((r) => r.title === 'Lunch');
 
     assert.equal(row.scheduleEventId, lunch._id.toString());
     assert.equal(row.location, 'Floor 4');
@@ -140,8 +140,8 @@ describe('GET /api/attendance/me', () => {
     await scanInto(organizer.token, hacker.token, lunch);
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
 
-    const lunchRow = res.body.checklist.find((r) => r.title === 'Lunch');
-    const dinnerRow = res.body.checklist.find((r) => r.title === 'Dinner');
+    const lunchRow = res.body.data.checklist.find((r) => r.title === 'Lunch');
+    const dinnerRow = res.body.data.checklist.find((r) => r.title === 'Dinner');
 
     assert.equal(lunchRow.checkedIn, true);
     assert.ok(lunchRow.checkedInAt);
@@ -155,7 +155,7 @@ describe('GET /api/attendance/me', () => {
     await scanInto(organizer.token, hacker.token, lunch);
     const res = await agent.get('/api/attendance/me').set(bearer(other.token));
 
-    for (const row of res.body.checklist) {
+    for (const row of res.body.data.checklist) {
       assert.equal(row.checkedIn, false);
     }
   });
@@ -167,9 +167,9 @@ describe('GET /api/attendance/me', () => {
     await scanInto(organizer.token, hacker.token, workshop);
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
 
-    assert.equal(res.body.count, 2);
+    assert.equal(res.body.data.count, 2);
     assert.equal(
-      res.body.checklist.some((r) => r.title === 'Intro to React'),
+      res.body.data.checklist.some((r) => r.title === 'Intro to React'),
       false
     );
   });
@@ -180,8 +180,8 @@ describe('GET /api/attendance/me', () => {
     const res = await agent.get('/api/attendance/me').set(bearer(hacker.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.count, 0);
-    assert.deepEqual(res.body.checklist, []);
+    assert.equal(res.body.data.count, 0);
+    assert.deepEqual(res.body.data.checklist, []);
   });
 
   test('no Attendance rows are created just by reading the checklist', async () => {
@@ -208,7 +208,7 @@ describe('GET /api/attendance/event/:scheduleEventId', () => {
       .set(bearer(organizer.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.count, 2);
+    assert.equal(res.body.data.count, 2);
   });
 
   test('each row names the hacker, so the headcount is readable', async () => {
@@ -220,8 +220,8 @@ describe('GET /api/attendance/event/:scheduleEventId', () => {
       .get(`/api/attendance/event/${lunch._id}`)
       .set(bearer(organizer.token));
 
-    assert.equal(res.body.attendance[0].user.email, 'bobby@example.com');
-    assert.equal(res.body.attendance[0].user.fullName, 'Bobby Brown');
+    assert.equal(res.body.data.attendance[0].user.email, 'bobby@example.com');
+    assert.equal(res.body.data.attendance[0].user.fullName, 'Bobby Brown');
   });
 
   test('an admin can read a headcount', async () => {
@@ -249,7 +249,7 @@ describe('GET /api/attendance/event/:scheduleEventId', () => {
       .set(bearer(organizer.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.count, 0);
+    assert.equal(res.body.data.count, 0);
   });
 
   test('a malformed event id is a 400', async () => {
@@ -303,8 +303,8 @@ describe('POST /api/attendance', () => {
       .send({ userId: hacker.user._id.toString(), scheduleEventId: lunch._id.toString() });
 
     assert.equal(res.status, 201);
-    assert.equal(res.body.attendance.checkedIn, true);
-    assert.equal(res.body.attendance.checkedInBy, organizer.user._id.toString());
+    assert.equal(res.body.data.attendance.checkedIn, true);
+    assert.equal(res.body.data.attendance.checkedInBy, organizer.user._id.toString());
   });
 
   test('a mentor can too (§3.2.2)', async () => {
@@ -329,7 +329,7 @@ describe('POST /api/attendance', () => {
       .send({ userId: hacker.user._id.toString(), scheduleEventId: lunch._id.toString() });
 
     const checklist = await agent.get('/api/attendance/me').set(bearer(hacker.token));
-    const row = checklist.body.checklist.find((r) => r.title === 'Lunch');
+    const row = checklist.body.data.checklist.find((r) => r.title === 'Lunch');
 
     assert.equal(row.checkedIn, true);
   });
@@ -346,7 +346,7 @@ describe('POST /api/attendance', () => {
     const second = await agent.post('/api/attendance').set(bearer(organizer.token)).send(body);
 
     assert.equal(second.status, 200);
-    assert.equal(second.body.alreadyCheckedIn, true);
+    assert.equal(second.body.data.alreadyCheckedIn, true);
     assert.equal(await Attendance.countDocuments(), 1);
   });
 
@@ -362,7 +362,7 @@ describe('POST /api/attendance', () => {
     const scan = await scanInto(organizer.token, hacker.token, lunch);
 
     assert.equal(scan.status, 200);
-    assert.equal(scan.body.alreadyCheckedIn, true);
+    assert.equal(scan.body.data.alreadyCheckedIn, true);
     assert.equal(await Attendance.countDocuments(), 1);
   });
 

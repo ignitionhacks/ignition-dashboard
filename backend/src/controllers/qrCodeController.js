@@ -6,6 +6,8 @@ const ScheduleEvent = require('../models/ScheduleEvent');
 const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
+// Only `ok` is imported: `created` is already a local variable name in this file.
+const { ok } = require('../utils/apiResponse');
 
 /**
  * QR code issuing, scanning and lookup (design doc §3.2.1).
@@ -36,16 +38,16 @@ const getMyQrCode = catchAsync(async (req, res) => {
   const userId = req.user._id;
 
   const existing = await QRCode.findOne({ userId });
-  if (existing) return res.json(existing);
+  if (existing) return ok(res, existing);
 
   try {
     const created = await QRCode.create({ userId });
-    return res.json(created);
+    return ok(res, created);
   } catch (err) {
     // Two of the user's own requests raced. The unique index on userId rejected
     // the loser; read back the winner rather than returning a 500.
     if (err.code === 11000) {
-      return res.json(await QRCode.findOne({ userId }));
+      return ok(res, await QRCode.findOne({ userId }));
     }
     throw err;
   }
@@ -86,7 +88,7 @@ const scanQrCode = catchAsync(async (req, res) => {
     checkedInBy: req.user._id,
   });
 
-  res.status(created ? 201 : 200).json({ alreadyCheckedIn: !created, attendance });
+  ok(res, { alreadyCheckedIn: !created, attendance }, created ? 201 : 200);
 });
 
 /**
@@ -101,7 +103,7 @@ const getUserByCode = catchAsync(async (req, res) => {
   const user = await findUserById(qrCode.userId);
   if (!user) throw new ApiError(404, 'User not found');
 
-  res.json(user);
+  ok(res, user);
 });
 
 module.exports = { getMyQrCode, scanQrCode, getUserByCode };

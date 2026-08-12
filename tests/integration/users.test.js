@@ -56,9 +56,9 @@ describe('token handling on GET /api/users/me', () => {
     const res = await agent.get('/api/users/me').set(bearer(hacker.token));
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.email, 'bobby@example.com');
-    assert.equal(res.body.fullName, 'Bobby Hacker');
-    assert.equal(res.body.passwordHash, undefined);
+    assert.equal(res.body.data.email, 'bobby@example.com');
+    assert.equal(res.body.data.fullName, 'Bobby Hacker');
+    assert.equal(res.body.data.passwordHash, undefined);
   });
 });
 
@@ -71,7 +71,7 @@ describe('PATCH /api/users/me', () => {
       .send({ firstName: 'Bob' });
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.firstName, 'Bob');
+    assert.equal(res.body.data.firstName, 'Bob');
   });
 
   test('cannot be used to self-promote', async () => {
@@ -81,7 +81,7 @@ describe('PATCH /api/users/me', () => {
       .set(bearer(hacker.token))
       .send({ role: 'admin' });
 
-    assert.equal(res.body.role, 'hacker');
+    assert.equal(res.body.data.role, 'hacker');
   });
 
   test('cannot be used to change the caller email', async () => {
@@ -91,7 +91,24 @@ describe('PATCH /api/users/me', () => {
       .set(bearer(hacker.token))
       .send({ email: 'someone-else@example.com' });
 
-    assert.equal(res.body.email, 'bobby@example.com');
+    assert.equal(res.body.data.email, 'bobby@example.com');
+  });
+
+  /**
+   * Team membership has no HTTP surface at all (§5's router list has no
+   * teamRouter - see docs/plan/04-team.md), so this profile route is the only
+   * place a hacker could plausibly try to join a team from the outside.
+   * SELF_WRITABLE_FIELDS has to keep saying no.
+   */
+  test('cannot be used to join a team', async () => {
+    const { hacker } = await seedRoles();
+    const res = await agent
+      .patch('/api/users/me')
+      .set(bearer(hacker.token))
+      .send({ teamId: '000000000000000000000001' });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.teamId, null);
   });
 });
 
@@ -138,7 +155,7 @@ describe('PATCH /api/users/:id/role', () => {
       .send({ role: 'organizer' });
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.role, 'organizer');
+    assert.equal(res.body.data.role, 'organizer');
   });
 
   test('a promotion takes effect on an already-issued token', async () => {

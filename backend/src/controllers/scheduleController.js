@@ -2,6 +2,7 @@ const ScheduleEvent = require('../models/ScheduleEvent');
 const { CATEGORIES } = require('../models/ScheduleEvent');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
+const { ok, created } = require('../utils/apiResponse');
 
 // Fields a client is allowed to set. Anything else in the body is ignored so
 // clients can't write derived/internal fields (day, isFoodEvent, timestamps).
@@ -49,7 +50,7 @@ const listEvents = catchAsync(async (req, res) => {
   filter.startTime = { $ne: null };
 
   const events = await ScheduleEvent.find(filter).sort({ startTime: 1 });
-  res.json({ count: events.length, events });
+  ok(res, { count: events.length, events });
 });
 
 /**
@@ -66,7 +67,7 @@ const upcomingEvents = catchAsync(async (req, res) => {
     .sort({ startTime: 1 })
     .limit(limit);
 
-  res.json({ count: events.length, events });
+  ok(res, { count: events.length, events });
 });
 
 /**
@@ -76,7 +77,7 @@ const upcomingEvents = catchAsync(async (req, res) => {
 const getEvent = catchAsync(async (req, res) => {
   const event = await ScheduleEvent.findById(req.params.id);
   if (!event) throw new ApiError(404, 'Event not found');
-  res.json(event);
+  ok(res, event);
 });
 
 /**
@@ -85,7 +86,7 @@ const getEvent = catchAsync(async (req, res) => {
  */
 const createEvent = catchAsync(async (req, res) => {
   const event = await ScheduleEvent.create(pickWritable(req.body));
-  res.status(201).json(event);
+  created(res, event);
 });
 
 /**
@@ -99,17 +100,21 @@ const updateEvent = catchAsync(async (req, res) => {
 
   Object.assign(event, pickWritable(req.body));
   await event.save();
-  res.json(event);
+  ok(res, event);
 });
 
 /**
  * DELETE /api/schedule/:id
  * Remove a cancelled event.
+ *
+ * Returns 200 with a body rather than 204: design doc §5 lists 200 for a
+ * successful DELETE and lists no 204 at all, and a 204 has no body to carry
+ * the response envelope in.
  */
 const deleteEvent = catchAsync(async (req, res) => {
   const event = await ScheduleEvent.findByIdAndDelete(req.params.id);
   if (!event) throw new ApiError(404, 'Event not found');
-  res.status(204).end();
+  ok(res, { deleted: true, id: event._id });
 });
 
 module.exports = {

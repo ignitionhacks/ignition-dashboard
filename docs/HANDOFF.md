@@ -102,13 +102,14 @@ ignition-dashboard/
 
 ## Current state — what's built and verified
 
-**Phases 0, 1, 2, 2.5 and 6 are done.** Verification: **`pass 161` / `fail 0`**
-(2026-08-05, on branch `backend/qr-attendance`).
+**Phases 0, 1, 2, 2.5, 3, 4, 5, 6, 7 and 8 are done.** Verification: **`pass 335` /
+`fail 0`** (2026-08-12, on branch `backend/api-design-and-remaining-entities`).
 
-> **Two live branches.** `backend/schedule-events` holds phases 0–2.5 (82 tests) and is
-> the one waiting on Youssef. `backend/qr-attendance` is **stacked on top of it** — it
-> needs `ScheduleEvent`, which isn't on `main` — and holds phase 6 as well (161 tests).
-> **Merge the schedule branch first**, otherwise the QR branch won't build.
+> **Three live branches, stacked.** `backend/schedule-events` holds phases 0–2.5
+> (82 tests) and is the one waiting on Youssef. `backend/qr-attendance` is stacked on it
+> — it needs `ScheduleEvent`, which isn't on `main` — and adds phase 6 (161 tests).
+> `backend/api-design-and-remaining-entities` is stacked on **that**, and adds phases 7,
+> 3, 4, 8 and 5 (335 tests). **Merge in that order** or none of them build.
 
 - **Phase 1 — Schedule Event (§2.2.1)**, the Wednesday deliverable. Model with all
   documented fields plus server-derived `day` (`YYYY-MM-DD`, UTC) and `isFoodEvent`.
@@ -133,9 +134,58 @@ ignition-dashboard/
   Repeat scans are idempotent — `200` with `alreadyCheckedIn: true`, timestamp unmoved.
   The meal checklist is **computed on read**, never pre-created. **Scope stopped at the
   entities** — no Profile page, no aggregate profile endpoint, `status` untouched.
+- **Phase 7 — API design (§5).** Every `/api` response is now
+  `{ success: true, data }` or `{ success: false, error: { code, message, details? } }`.
+  `utils/apiResponse.js` (`ok`/`created`/`fail`), a seven-code `ERROR_CODES` map, and a
+  rewritten `errorHandler`. All 21 existing response sites and all the tests were
+  migrated. **Two deliberate exceptions:** `GET /health` stays bare, and `DELETE` returns
+  `200` + `{ deleted, id }` rather than `204` (a `204` has no body to carry the envelope).
+  Done before phases 3–5 so the new entities were written against the final contract once.
+- **Phase 3 — Announcements (§1.2.2).** `Announcement` model (optional `title`, required
+  `body`, `authorId` + denormalized `authorName` taken from the token, `postedAt`,
+  `pinned`), indexed `{ pinned: -1, postedAt: -1 }`. Four routes on `/api/announcements`:
+  `GET` for any authenticated role, `POST`/`PATCH /:id`/`DELETE /:id` behind
+  `requireRole('organizer', 'admin')`. Pinned sorts above newer unpinned; `?limit`/`?page`
+  are clamped (max 50), never rejected; `PATCH` can't move `postedAt` or rewrite the
+  author. **No `GET /:id`** and **no read/unread state** — §1.2.2 asks for neither.
+  Built tests-first.
   **Manual QA is done** (2026-08-05): Postman folders 9/10/11 → `44/44`, `43/43`, `5/5`
   against emptied collections, and `manual-qa.md` §9/§10 Passed columns are filled in.
   Cleanup between runs is scripted — see `6.11` in [CHECKLIST.md](CHECKLIST.md).
+- **Phase 4 — HackathonConfig + countdown (§1.2.3).** A **singleton** document holding
+  `hackathonStartAt` / `hackathonEndAt` / optional `submissionDeadline`. The singleton is
+  enforced by a unique index on a pinned internal field, not by convention — a second
+  document is impossible. `GET /api/config/hackathon` (any role) returns the config plus
+  `serverTime` and a `countdown` computed per request (`msRemaining`, `HH:MM:SS`
+  `formatted` that does **not** wrap at 24h, `hasStarted`, `hasEnded`, clamped at zero).
+  `PUT /api/config/hackathon` is **admin-only** — unlike schedule and announcement writes,
+  an organizer gets a `403` — and is a full replace, so omitting `submissionDeadline`
+  clears it. Built tests-first.
+- **Phase 8 — Team (§7's assumption).** `Team` model (`name` unique **case-insensitively**
+  via a collated index, `memberIds` capped at 4, optional `createdBy`) plus
+  `services/teamService.js`, which is the only sanctioned writer of `memberIds` and
+  `User.teamId` — a user belongs to at most one team, adding twice is idempotent, and
+  `reconcile()` repairs drift between the two sides. **No router is mounted, deliberately:**
+  §5's router list has no team router, so teams are provisioned by
+  `backend/src/scripts/manageTeams.js` (`list` / `create` / `add` / `remove` / `reconcile`),
+  the way §7 provisions elevated roles. The cost — teams can't be created from Postman — is
+  written up in [README.md](README.md) and [plan/04-team.md](plan/04-team.md); adding a
+  `teamRouter` later is ~40 lines because every rule already lives in the service. Built
+  tests-first.
+- **Phase 5 — Project Submission (§1.2.4).** `Submission` model scoped to a **team**, not
+  a user: `teamId` (unique-indexed — that index *is* §4's "one submission per team"),
+  `title`/`description` with 200/5000 caps, optional `devpostUrl`/`repoUrl` validated only
+  for an `http(s)` scheme, immutable `submittedAt`, and an added `submittedBy` for audit.
+  Four routes on `/api/submissions`: `GET /mine`, `POST`, `PATCH /:id` (hacker, own team
+  only) and `GET /` for judging (organizer/admin). **`teamId` and `submittedBy` always
+  come from the token, never the body**, on create and update alike. A hacker with no team
+  gets `409 NO_TEAM` — a distinct code from the "already submitted" `409`. `GET /mine`
+  with nothing submitted is **`200` with `data: null`, not a `404`**: it drives the Home
+  button's two states. Deadline = `submissionDeadline` if set, else `hackathonEndAt`; past
+  it, `POST` and `PATCH` are `403 SUBMISSION_CLOSED`. **No config at all fails open** (the
+  write is allowed and a warning is logged) — see CHECKLIST **5.Q2**. Ownership is checked
+  *before* the deadline so an outsider can't probe the window. No `DELETE`, no `GET /:id`.
+  Built tests-first.
 
 ### How to verify in one command
 
@@ -145,7 +195,7 @@ From `C:\Users\abbar\OneDrive\Desktop\Ignition_Hack\ignition-dashboard\tests`:
 npm test
 ```
 
-Ends with `pass 161` / `fail 0` → the backend is healthy. If not, fix that before anything
+Ends with `pass 335` / `fail 0` → the backend is healthy. If not, fix that before anything
 else. (First time only: `npm install` in **both** `backend` and `tests`.)
 
 ### ⚠️ Known gaps — don't mistake these for bugs
@@ -172,6 +222,21 @@ else. (First time only: `npm install` in **both** `backend` and `tests`.)
   create a user. It only ever creates a `hacker` — **there is no HTTP route that creates
   an organizer or admin.** Bootstrap the first admin by editing the `users` document
   directly in Atlas (manual-qa §7.1).
+- **Teams have no HTTP routes and that is on purpose.** Don't "fix" it by adding a
+  `teamRouter` — §5's router list doesn't have one, and Abdullah's instruction was to
+  follow the doc. Use `node src/scripts/manageTeams.js` from `backend/`. See CHECKLIST
+  open question **8.Q1** if the team wants that revisited.
+- **Testing submissions needs that CLI script first.** No team, no submission — Postman
+  alone is not enough for this one entity. Folder 16 handles it as gracefully as it can:
+  rows 16.0.1–16.0.4 create the accounts over HTTP, its description carries the five
+  `manageTeams.js` commands to run next, and 16.0.11 fails with a message naming them if
+  they were skipped. By hand, manual-qa §16 still needs §15 run first.
+- **A missing hackathon config means no submission deadline at all.** The check fails open
+  and logs `[submissions] No hackathon config is set`. "The deadline isn't working" is
+  almost always "nobody ran `PUT /api/config/hackathon`".
+- **An organizer cannot edit or delete a submission.** Write routes are hacker-only and
+  there is no `DELETE` — §1.2.4 lists neither. Fixes go back to the team or into Atlas.
+  CHECKLIST open question **5.Q1**.
 - **Times are stored/compared in UTC.** `day` is derived from `startTime` in UTC
   (`toDayString` in the model). If the event needs a fixed local timezone for day
   grouping, that one function is the single place to change it.
@@ -182,14 +247,45 @@ else. (First time only: `npm install` in **both** `backend` and `tests`.)
 
 ## What to do next
 
-**Open [CHECKLIST.md](CHECKLIST.md) — that is the master planner.** Phases 0–2.5 are done.
-Next is **Phase 3 (Announcements, §1.2.2)**, and it must follow the workflow above:
-**tests first, then implementation** (item T.1 — Phases 1–2 were built the other way round
-and that's a gap being closed).
+**Open [CHECKLIST.md](CHECKLIST.md) — that is the master planner**, and
+[plan/README.md](plan/README.md) for the current run of work (§3–§5 of the design doc,
+split into six phases with one `.md` each). **All six plan phases are done.** Nothing in
+`plan/` is waiting on another agent.
 
-Also outstanding, independent of Phase 3:
+What's left is **Abdullah's step 8: run the Postman collection against Atlas.** The
+collection was rewritten in plan phase 6 —
+[`docs/postman/ignition-dashboard.postman_collection.json`](postman/ignition-dashboard.postman_collection.json),
+now **216 requests across 16 folders** (104 across 11 before), every assertion moved under
+the §5 envelope, plus a collection-level post-response script that checks the envelope on
+every single request. It has never been run against a real database; the **Passed** columns
+in [manual-qa.md](manual-qa.md) §12, §13, §14, §16 are all blank, and so are §15's.
+
+Three things to know before running it:
+
+1. **Delete any older import first.** The whole collection changed shape — a stale copy
+   will "pass" on `undefined === undefined`.
+2. **Folder 16 needs five `manageTeams.js` commands** run between rows 16.0.4 and 16.0.5.
+   They are in the folder's description. Row 16.0.11 fails with a message naming them if
+   they were skipped.
+3. **Folders 14 and 16 write the shared hackathon config.** 14.0.4 saves the existing dates
+   and 14.16 restores them; folder 16 leaves a live 48-hour window in place. Stopping
+   either folder half way leaves the config wrong for everyone.
+
+Then fill in the **Passed** columns and push. See
+[plan/06-postman-and-docs.md](plan/06-postman-and-docs.md) for what landed and the five
+places it deviates from its own plan.
+
+> **Two numbering schemes, unfortunately.** CHECKLIST phase numbers follow the design
+> doc's sections; `plan/` phases are numbered 1–6 in execution order. CHECKLIST "phase 7"
+> = plan "phase 1" (the envelope); CHECKLIST "phase 3" = plan "phase 2" (Announcements);
+> CHECKLIST "phase 4" = plan "phase 3" (HackathonConfig); CHECKLIST "phase 8" = plan
+> "phase 4" (Team). CHECKLIST "phase 5" and plan "phase 5" happen to be the same thing
+> (Project Submission) — that is a coincidence, not a rule.
+
+Also outstanding, independent of that:
 - Abdullah runs manual-qa §1 to prove the live database connection (D.5).
-- Phase 3 gets its **own branch** off `main` once this one is reviewed and merged (T.6).
+- Each remaining phase gets its **own branch** off `main` once this one is reviewed and
+  merged (T.6).
 
 Rules for the checklist:
 - Every step has a **Test:** line. Never mark a step `[x]` until its test has actually passed.
