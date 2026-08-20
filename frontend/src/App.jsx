@@ -28,7 +28,7 @@ function Schedule() {
 function PortalEntry() {
   const { isAuthenticated, user, loading } = useAuth();
   if (loading) return <AuthLoading />;
-  if (!isAuthenticated) return <Navigate to="/schedule" replace />;
+  if (!isAuthenticated) return <Navigate to="/" replace />;
   return <Navigate to={portalPathForRole(user.role)} replace />;
 }
 
@@ -37,26 +37,26 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/portal" element={<PortalEntry />} />
-          <Route path="/schedule" element={<Schedule />} />
-          <Route
+          {/* <Route path="/portal" element={<PortalEntry />} /> */}
+          <Route path="/" element={<Schedule />} />
+          {/* <Route
             path="/profile"
             element={
               <RedirectOrganizerToOwnPortal>
                 <ProfilePage />
               </RedirectOrganizerToOwnPortal>
             }
-          />
-          <Route
+          /> */}
+          {/* <Route
             path="/organizer"
             element={
               <RequireRole roles={['organizer', 'admin']}>
                 <OrganizerPortal />
               </RequireRole>
             }
-          />
-          <Route path="/" element={<Navigate to="/portal" replace />} />
-          <Route path="*" element={<Navigate to="/portal" replace />} />
+          /> */}
+          {/* <Route path="/" element={<Navigate to="/portal" replace />} />
+          <Route path="*" element={<Navigate to="/portal" replace />} /> */}
         </Routes>
       </BrowserRouter>
     </AuthProvider>
