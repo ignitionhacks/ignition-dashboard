@@ -30,6 +30,10 @@ export function HelpIcon() {
   return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 16.5V7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v6A2.5 2.5 0 0 1 16.5 16H9l-4 3.5V16.5z" /></svg>
 }
 
+export function PackageIcon() {
+  return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3.2 20 7.4v9.2L12 20.8 4 16.6V7.4L12 3.2z" /><path d="M4 7.4 12 11.6l8-4.2M12 11.6v9.2" /></svg>
+}
+
 export function StarIcon() {
   return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M12 3.2 14.4 9l6.2.5-4.7 4 1.5 6.1L12 16.6 6.6 19.6l1.5-6.1-4.7-4L9.6 9 12 3.2z" /></svg>
 }

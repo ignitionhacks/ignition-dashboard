@@ -9,7 +9,7 @@ export const CATEGORIES = ['General', 'Ceremonies', 'Workshops', 'Fun Event']
 
 export const CATEGORY_COLORS = {
   General: '#4894ff',
-  Ceremonies: '#e0508a',
+  Ceremonies: '#FFB44A',
   Workshops: '#ff585b',
   'Fun Event': '#7bc96f',
 }
@@ -17,7 +17,7 @@ export const CATEGORY_COLORS = {
 export const SCHEDULE_DAYS = [
   {
     day: 'Day 1',
-    dateLabel: 'August 14',
+    dateLabel: 'August 21',
     events: [
       { id: 'opening-ceremonies', time: '7:00 PM – 8:00 PM', title: 'Opening Ceremonies', category: 'Ceremonies' },
       { id: 'hacking-starts', time: '8:00 PM', title: 'Hacking Starts', category: 'General' },
@@ -26,12 +26,13 @@ export const SCHEDULE_DAYS = [
   },
   {
     day: 'Day 2',
-    dateLabel: 'August 15',
+    dateLabel: 'August 22',
     events: [
-      { id: 'after-hours-game-night', time: '1:00 AM – 9:00 AM', title: 'After-Hours Game Night', category: 'Fun Event' },
-      { id: 'scavenger-hunt', time: '9:00 AM – 6:00 PM', title: 'Google Form Scavenger Hunt', category: 'Fun Event' },
+      { id: 'after-hours-game-night', time: '1:00 AM – 3:00 AM', title: 'After-Hours Game Night', category: 'Fun Event' },
+      { id: 'scavenger-hunt', time: '9:00 AM – 9:00 PM', title: 'Google Form Scavenger Hunt', category: 'Fun Event' },
       { id: 'waterloo-panel', time: '12:00 PM – 12:40 PM', title: 'Waterloo Engineering Admissions Panel', category: 'Workshops' },
       { id: 'world-labs-speaker', time: '12:45 PM – 1:30 PM', title: 'World Labs Guest Speaker', category: 'Workshops' },
+      { id: 'building-with-base44', time: '1:45 PM – 2:30 PM', title: 'Building with Base44', category: 'Workshops' },
       { id: 'hacking-ends', time: '6:00 PM', title: 'Hacking Ends', category: 'General' },
       { id: 'judging-period', time: '6:00 PM – 8:00 PM', title: 'Judging Period', category: 'General' },
       { id: 'closing-ceremonies', time: '8:00 PM – 9:00 PM', title: 'Closing Ceremonies', category: 'Ceremonies' },

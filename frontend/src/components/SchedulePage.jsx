@@ -40,7 +40,7 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      <p className="date-label">August 14–15</p>
+      <p className="date-label">August 21–22</p>
 
       <div className="schedule-body">
         {visibleDays.map(({ day, dateLabel, events }) => (
@@ -58,9 +58,6 @@ export default function SchedulePage() {
                     <div className="event-time">{event.time}</div>
                     <div className="event-details">
                       <h3>{event.title}</h3>
-                      <div className="location-row">
-                        <span>{event.category}</span>
-                      </div>
                     </div>
                     <div className="event-bar" style={{ backgroundColor: CATEGORY_COLORS[event.category] }} />
                   </article>

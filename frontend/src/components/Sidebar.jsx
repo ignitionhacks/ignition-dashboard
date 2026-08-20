@@ -4,14 +4,11 @@ import { useAuth } from '../lib/auth'
 import {
   HomeIcon,
   ScheduleIcon,
-  LinkIcon,
   DiscordIcon,
-  MapIcon,
-  HelpIcon,
+  PackageIcon,
 } from './icons'
 
 const HACKER_MENU_ITEMS = [
-  { key: 'home', label: 'Home', icon: HomeIcon, path: '/landing' },
   { key: 'schedule', label: 'Schedule', icon: ScheduleIcon, path: '/schedule' },
 ]
 
@@ -20,10 +17,8 @@ const ORGANIZER_MENU_ITEMS = [
 ]
 
 const QUICK_LINKS = [
-  { key: 'devpost', label: 'Devpost', icon: LinkIcon },
-  { key: 'discord', label: 'Discord', icon: DiscordIcon },
-  { key: 'map', label: 'Venue Map', icon: MapIcon },
-  { key: 'help', label: 'Need Help?', icon: HelpIcon },
+  { key: 'discord', label: 'Discord', icon: DiscordIcon, href: 'https://discord.gg/rKgSHQVtk' },
+  { key: 'hacker-package', label: 'Hacker Package', icon: PackageIcon, href: 'https://drive.google.com/file/d/10DOm224rWEhRUBs4r4NMvzFsvHvR7aY0/view' },
 ]
 
 function BrandIcons() {
@@ -71,11 +66,17 @@ export default function Sidebar({ activeKey }) {
       <div className="hk-landing-sidebar-section">
         <h2 className="hk-landing-sidebar-heading">Quick Links</h2>
         <nav className="hk-landing-sidebar-nav" aria-label="Quick links">
-          {QUICK_LINKS.map(({ key, label, icon: Icon }) => (
-            <button key={key} type="button" className="hk-landing-nav-item">
+          {QUICK_LINKS.map(({ key, label, icon: Icon, href }) => (
+            <a
+              key={key}
+              className="hk-landing-nav-item"
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <span className="hk-landing-nav-icon"><Icon /></span>
               <span>{label}</span>
-            </button>
+            </a>
           ))}
         </nav>
       </div>
