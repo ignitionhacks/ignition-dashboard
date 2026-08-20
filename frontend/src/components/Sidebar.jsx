@@ -9,7 +9,7 @@ import {
 } from './icons'
 
 const HACKER_MENU_ITEMS = [
-  { key: 'schedule', label: 'Schedule', icon: ScheduleIcon, path: '/schedule' },
+  { key: 'schedule', label: 'Schedule', icon: ScheduleIcon, path: '/' },
 ]
 
 const ORGANIZER_MENU_ITEMS = [

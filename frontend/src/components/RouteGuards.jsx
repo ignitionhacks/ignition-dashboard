@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth'
 /** Where a logged-in user's own portal lives, keyed by their DB-backed role. */
 export function portalPathForRole(role) {
   if (role === 'organizer' || role === 'admin') return '/organizer'
-  return '/schedule'
+  return '/'
 }
 
 /**
@@ -19,7 +19,7 @@ export function RequireAuth({ children }) {
   const location = useLocation()
 
   if (loading) return <AuthLoading />
-  if (!isAuthenticated) return <Navigate to="/schedule" state={{ from: location }} replace />
+  if (!isAuthenticated) return <Navigate to="/" state={{ from: location }} replace />
   return children
 }
 
@@ -35,7 +35,7 @@ export function RequireRole({ roles, children }) {
   const { user, loading } = useAuth()
 
   if (loading) return <AuthLoading />
-  if (!user) return <Navigate to="/schedule" replace />
+  if (!user) return <Navigate to="/" replace />
   if (!roles.includes(user.role)) return <Navigate to={portalPathForRole(user.role)} replace />
   return children
 }
