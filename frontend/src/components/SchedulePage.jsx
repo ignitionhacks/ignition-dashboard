@@ -40,7 +40,7 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      <p className="date-label">August 21–22</p>
+      <p className="date-label">August 21-22 (All times in ET)</p>
 
       <div className="schedule-body">
         {visibleDays.map(({ day, dateLabel, events }) => (
