@@ -1,19 +1,13 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import logoImg from '../assets/logo.svg'
-import { useAuth } from '../lib/auth'
 import {
-  HomeIcon,
   ScheduleIcon,
   DiscordIcon,
   PackageIcon,
 } from './icons'
 
-const HACKER_MENU_ITEMS = [
+const MENU_ITEMS = [
   { key: 'schedule', label: 'Schedule', icon: ScheduleIcon, path: '/' },
-]
-
-const ORGANIZER_MENU_ITEMS = [
-  { key: 'organizer', label: 'Organizer Portal', icon: HomeIcon, path: '/organizer' },
 ]
 
 const QUICK_LINKS = [
@@ -35,9 +29,7 @@ function BrandIcons() {
 export default function Sidebar({ activeKey }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { user } = useAuth()
-  const isOrganizer = user?.role === 'organizer' || user?.role === 'admin'
-  const menuItems = isOrganizer ? ORGANIZER_MENU_ITEMS : HACKER_MENU_ITEMS
+  const menuItems = MENU_ITEMS
 
   return (
     <aside className="hk-landing-sidebar">
